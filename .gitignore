@@ -1,0 +1,31 @@
+# Dados brutos do TSE (baixados manualmente, ~330 MB)
+*.zip
+
+# Dados extraídos dos zips (~2 GB)
+dados/2018/
+dados/2020/
+dados/2022/
+dados/2024/
+
+# CSVs consolidados (~408 MB; arquivos individuais de até 128 MB, acima do
+# limite de 100 MB do GitHub). São reproduzíveis via scripts/consolida_*.py
+dados/processados/*.csv
+
+# Arquivos de candidatura baixados do TSE (~150 MB com os zips)
+dados/brutos_tse/
+
+# A base unificada (dados/processados/unificado/*.parquet) NÃO é ignorada:
+# são 5,3 MB no total e é o entregável que o dashboard consome.
+
+# Notas de contexto locais
+CLAUDE.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Sistema
+.DS_Store
