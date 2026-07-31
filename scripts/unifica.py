@@ -156,7 +156,7 @@ def monta_dim_local_atual(dim_local, sk_local, zonas):
     return esquema.aplica(a, 'dim_local_atual').sort_values('SK_LOCAL').reset_index(drop=True)
 
 
-def monta_fatos(b, dim_eleicao_cargo):
+def monta_fatos(b, dim_eleicao_cargo, dim_votavel):
     """fato_votos + os dois fatos agregados, em grãos separados."""
     vpe = dim_eleicao_cargo.set_index(['SK_ELEICAO', 'CD_CARGO'])['QT_VOTOS_POR_ELEITOR']
     idx = pd.MultiIndex.from_arrays([b['SK_ELEICAO'], b['CD_CARGO']])
@@ -178,6 +178,16 @@ def monta_fatos(b, dim_eleicao_cargo):
                                  'QT_VOTOS_BRANCO', 'QT_VOTOS_NULO']].sum(axis=1)
     qtd = b.groupby(['SK_ELEICAO', 'SK_LOCAL', 'CD_CARGO']).size().rename('QT_VOTAVEIS').reset_index()
     flc = flc.merge(qtd, on=['SK_ELEICAO', 'SK_LOCAL', 'CD_CARGO'])
+
+    # Denominador na definição legal: voto em candidato com registro indeferido
+    # é nulo, não válido. Só desconta o que se sabe indeferido — em 2024 o TSE
+    # não publica a situação, então nada é descontado ali.
+    inaptos = set(dim_votavel.loc[dim_votavel['FL_CANDIDATURA_APTA'].eq(False), 'SK_VOTAVEL'])
+    desconto = (b[b['SK_VOTAVEL'].isin(inaptos)]
+                .groupby(['SK_ELEICAO', 'SK_LOCAL', 'CD_CARGO'], as_index=False)['QT_VOTOS'].sum()
+                .rename(columns={'QT_VOTOS': '_desconto'}))
+    flc = flc.merge(desconto, on=['SK_ELEICAO', 'SK_LOCAL', 'CD_CARGO'], how='left')
+    flc['QT_VOTOS_VALIDOS_OFICIAL'] = flc['QT_VOTOS_VALIDOS'] - flc['_desconto'].fillna(0)
     fato_local_cargo = esquema.aplica(flc, 'fato_local_cargo')
 
     # Participação é atributo do local na eleição: uma linha por local.
@@ -234,7 +244,7 @@ def main():
     dim_municipio = monta_dim_municipio(b)
     dim_local = monta_dim_local(b, sk_local, dim_eleicao)
     dim_local_atual = monta_dim_local_atual(dim_local, sk_local, zonas)
-    fato_votos, fato_local_cargo, fato_local = monta_fatos(b, dim_eleicao_cargo)
+    fato_votos, fato_local_cargo, fato_local = monta_fatos(b, dim_eleicao_cargo, dim_votavel)
 
     tabelas = {
         'fato_votos': fato_votos, 'fato_local_cargo': fato_local_cargo, 'fato_local': fato_local,

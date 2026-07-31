@@ -20,6 +20,25 @@ fato_local_cargo     41.389   eleição × local × cargo             válidos, 
 fato_local           14.023   eleição × local                     aptos, comparecimento, abstenção
 ```
 
+## Qual denominador usar para percentual
+
+`fato_local_cargo` traz **dois** totais de votos válidos, e a diferença entre eles não é
+cosmética:
+
+| Coluna | Definição |
+|---|---|
+| `QT_VOTOS_VALIDOS` | nominais + legenda, tudo que não é branco nem nulo |
+| **`QT_VOTOS_VALIDOS_OFICIAL`** | idem, **menos os votos em candidatos com registro indeferido** — é a definição legal, e a que reproduz os percentuais publicados pelo TSE |
+
+Em 2022, três candidatos a governador estavam com registro indeferido (Coronel Diego
+Melo, Gessy Lima e Lourdes Melo) e somaram 30.721 votos. Pelo denominador simples,
+Rafael Fonteles fica com 56,72%; pelo oficial, com os **57,62%** que o TSE publicou.
+Total descontado por ano: 11.971 (2018), 12.533 (2020), 34.721 (2022).
+
+Em 2024 o TSE não publica a situação do registro (o campo vem como `#NE`), então
+`FL_CANDIDATURA_APTA` fica nulo e nada é descontado — as duas colunas são iguais nesse
+ano. **Use `QT_VOTOS_VALIDOS_OFICIAL` como padrão.**
+
 ## Tabelas
 
 | Tabela | Linhas | Grão |
@@ -129,8 +148,11 @@ fusão silenciosa:
 - nenhum político aparece duas vezes na mesma disputa
 - `QT_APTOS = QT_COMPARECIMENTO + QT_ABSTENCAO`, e só as suplementares ficam sem eleitorado
 - votos no cargo de voto único = comparecimento, em cada eleição ordinária
-- resultados oficiais reproduzidos: Wellington Dias 55,65% (2018), Dr. Pessoa 62,31%
-  (2º turno 2020), Rafael Fonteles 56,72% (2022), Sílvio Mendes 52,19% (Teresina 2024)
+- resultados oficiais reproduzidos, pelo denominador legal: Wellington Dias 55,65%
+  (2018), Dr. Pessoa 62,31% (2º turno 2020), Rafael Fonteles 57,62% (2022), Sílvio
+  Mendes 52,19% (Teresina 2024)
+- totais por ano/turno/cargo conferidos **direto dos zips originais**, sem passar pela
+  camada intermediária: 40 verificações, todas batendo
 - prefeituras por sigla canônica: 2020 PP 83 / PSD 40 / MDB 36 / PT 23; 2024 PSD 65 /
   MDB 57 / PT 50 / PP 34 — o teste que pegaria uma fusão PSC/Podemos
 

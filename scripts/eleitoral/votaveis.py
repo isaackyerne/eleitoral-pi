@@ -39,7 +39,7 @@ def carrega_candidaturas():
     for ano in esquema.ANOS:
         caminho = os.path.join(esquema.DIR_BRUTOS_TSE, f'consulta_cand_{ano}_PI.csv')
         c = pd.read_csv(caminho, sep=';', encoding='latin1', dtype=str, quotechar='"',
-                        na_values=['#NULO#', '#NE#'], usecols=_COLS_CAND)
+                        na_values=esquema.NA_TSE, usecols=_COLS_CAND)
         c['ANO_ELEICAO'] = ano
         partes.append(c)
     c = pd.concat(partes, ignore_index=True)
@@ -84,7 +84,7 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     m = v.merge(
         cand_por_nr[['ANO_ELEICAO', 'NR_TURNO', 'UE', 'CD_CARGO', 'NR_CANDIDATO',
                      'SQ_CANDIDATO', 'NM_CANDIDATO', 'NM_URNA_CANDIDATO', 'NR_TITULO_ELEITORAL_CANDIDATO',
-                     'DS_SIT_TOT_TURNO', 'SG_FEDERACAO', 'DT_NASCIMENTO',
+                     'DS_SITUACAO_CANDIDATURA', 'DS_SIT_TOT_TURNO', 'SG_FEDERACAO', 'DT_NASCIMENTO',
                      'DS_GENERO', 'DS_COR_RACA', 'DS_GRAU_INSTRUCAO', 'DS_OCUPACAO']],
         left_on=['ANO_ELEICAO', 'NR_TURNO', 'UE', 'CD_CARGO', 'NR_VOTAVEL'],
         right_on=['ANO_ELEICAO', 'NR_TURNO', 'UE', 'CD_CARGO', 'NR_CANDIDATO'],
@@ -94,8 +94,9 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     m['SQ_CANDIDATO'] = m['SQ_CANDIDATO'].fillna(m['SQ_CANDIDATO_C'])
     enriquecido = m['SQ_CANDIDATO'].map(cand_por_sq['NR_TITULO_ELEITORAL_CANDIDATO'])
     m['NR_TITULO_ELEITORAL_CANDIDATO'] = enriquecido.fillna(m['NR_TITULO_ELEITORAL_CANDIDATO']).fillna(por_sq)
-    for col in ['NM_CANDIDATO', 'NM_URNA_CANDIDATO', 'DS_SIT_TOT_TURNO', 'SG_FEDERACAO',
-                'DT_NASCIMENTO', 'DS_GENERO', 'DS_COR_RACA', 'DS_GRAU_INSTRUCAO', 'DS_OCUPACAO']:
+    for col in ['NM_CANDIDATO', 'NM_URNA_CANDIDATO', 'DS_SITUACAO_CANDIDATURA',
+                'DS_SIT_TOT_TURNO', 'SG_FEDERACAO', 'DT_NASCIMENTO', 'DS_GENERO',
+                'DS_COR_RACA', 'DS_GRAU_INSTRUCAO', 'DS_OCUPACAO']:
         pelo_sq = m['SQ_CANDIDATO'].map(cand_por_sq[col])
         m[col] = m[col].fillna(pelo_sq)
 
@@ -105,8 +106,9 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     # linhas da mesma disputa.
     e_nominal = m['TP_VOTO'].eq('Nominal')
     for col in ['SQ_CANDIDATO', 'NR_TITULO_ELEITORAL_CANDIDATO', 'NM_CANDIDATO',
-                'NM_URNA_CANDIDATO', 'DS_SIT_TOT_TURNO', 'SG_FEDERACAO', 'DT_NASCIMENTO',
-                'DS_GENERO', 'DS_COR_RACA', 'DS_GRAU_INSTRUCAO', 'DS_OCUPACAO']:
+                'NM_URNA_CANDIDATO', 'DS_SITUACAO_CANDIDATURA', 'DS_SIT_TOT_TURNO',
+                'SG_FEDERACAO', 'DT_NASCIMENTO', 'DS_GENERO', 'DS_COR_RACA',
+                'DS_GRAU_INSTRUCAO', 'DS_OCUPACAO']:
         m[col] = m[col].where(e_nominal)
 
     # --- nomes canônicos ---------------------------------------------------
@@ -135,6 +137,12 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     m['NM_VOTAVEL_CHAVE'] = canon.chave(m['NM_VOTAVEL'])
     m['NM_URNA'] = canon.texto(m['NM_URNA_CANDIDATO'])
 
+    # Voto em candidato com registro indeferido não entra nos votos válidos
+    # oficiais. Em 2024 o TSE publica a situação como "#NE", então o valor fica
+    # nulo — desconhecido, não "apto".
+    situ = m['DS_SITUACAO_CANDIDATURA'].astype('string')
+    m['FL_CANDIDATURA_APTA'] = situ.eq('APTO').where(situ.notna() & nominal).astype('boolean')
+
     m['FL_ELEITO'] = m['DS_SIT_TOT_TURNO'].str.upper().str.startswith('ELEITO')
     m['FL_ELEITO'] = m['FL_ELEITO'].where(nominal, pd.NA).astype('boolean')
     m['NR_IDADE'] = _idade(m['DT_NASCIMENTO'], m['ANO_ELEICAO'])
@@ -150,7 +158,8 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     # Colapsa Branco/Nulo em duas linhas globais.
     esp = m[m['TP_VOTO'].isin(['Branco', 'Nulo'])].drop_duplicates('TP_VOTO').copy()
     for c in ['SK_ELEICAO', 'CD_MUNICIPIO_UE', 'CD_CARGO', 'NR_VOTAVEL', 'SQ_CANDIDATO',
-              'SK_PARTIDO', 'NM_URNA', 'TP_NOME_ORIGEM', 'DS_SIT_TOT_TURNO',
+              'SK_PARTIDO', 'NM_URNA', 'TP_NOME_ORIGEM', 'DS_SITUACAO_CANDIDATURA',
+              'FL_CANDIDATURA_APTA', 'DS_SIT_TOT_TURNO',
               'DS_GENERO', 'DS_COR_RACA', 'DS_GRAU_INSTRUCAO', 'DS_OCUPACAO',
               'NR_IDADE', 'SG_FEDERACAO']:
         esp[c] = pd.NA

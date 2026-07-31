@@ -7,7 +7,7 @@
 Governador, Senador, Deputado Federal e Deputado Estadual.
 
 Não há 2º turno estadual: Rafael Fonteles foi eleito governador já no 1º turno, com
-56,72% dos votos válidos. O 2º turno de 30/10/2022 foi apenas presidencial, e a
+57,62% dos votos válidos. O 2º turno de 30/10/2022 foi apenas presidencial, e a
 eleição presidencial está em outro arquivo do TSE, fora deste conjunto.
 
 Gerado por `scripts/consolida_2022.py` a partir de `dados/2022/`.
@@ -65,5 +65,10 @@ individual do candidato. Para analisar por federação é preciso agrupar manual
   comparecimento acima dos aptos
 - Participação: 82,30% (2.114.006 de 2.568.604 aptos)
 - `PCT_VOTOS_VALIDOS` soma 100% por local × cargo (desvio máximo 0,004 p.p.)
-- Governador reproduz o oficial: Rafael Fonteles 56,72% × Sílvio Mendes 41,29%
+- Governador: Rafael Fonteles 1.115.139 votos × Sílvio Mendes 811.806, idênticos ao
+  oficial. **Atenção ao percentual:** `PCT_VOTOS_VALIDOS` deste CSV usa como denominador
+  todos os votos nominais e dá 56,72%, enquanto o TSE publica 57,62% — a definição legal
+  de voto válido exclui os três candidatos com registro indeferido (Coronel Diego Melo,
+  Gessy Lima e Lourdes Melo, 30.721 votos). A base unificada traz
+  `QT_VOTOS_VALIDOS_OFICIAL` já com esse desconto.
 - Senador: Wellington Dias 51,34%, eleito para a vaga única

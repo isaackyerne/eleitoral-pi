@@ -10,8 +10,13 @@ Granularidade: local de votação x cargo x votável.
 """
 
 import os
+import sys
+
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from eleitoral import esquema  # noqa: E402
 
 BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dados')
 BRUTO = os.path.join(BASE, '2018')
@@ -33,7 +38,7 @@ def carrega_votacao():
     df = pd.read_csv(
         os.path.join(BRUTO, 'votacao_secao_2018_PI.csv'),
         sep=';', encoding='latin1', quotechar='"', dtype=str,
-        na_values=['#NULO#', '#NE#'],
+        na_values=esquema.NA_TSE,
     )
     df['QT_VOTOS'] = pd.to_numeric(df['QT_VOTOS'])
     return df
@@ -45,7 +50,7 @@ def carrega_eleitorado():
     leitor = pd.read_csv(
         os.path.join(BRUTO, 'eleitorado_local_votacao_2018.csv'),
         sep=';', encoding='latin1', quotechar='"', dtype=str,
-        na_values=['#NULO#', '#NE#'], chunksize=200_000,
+        na_values=esquema.NA_TSE, chunksize=200_000,
     )
     for bloco in leitor:
         partes.append(bloco[(bloco['SG_UF'] == 'PI') & (bloco['NR_TURNO'] == '1')])

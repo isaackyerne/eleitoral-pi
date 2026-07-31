@@ -16,6 +16,11 @@ DIR_REFERENCIA = os.path.join(RAIZ, 'scripts', 'referencia')
 
 ANOS = [2018, 2020, 2022, 2024]
 
+# Sentinelas de nulo do TSE. Os arquivos de votação usam '#NULO#'/'#NE#' e os de
+# candidatura usam '#NULO'/'#NE' — sem as quatro formas, o "#NE" de 2024 passa
+# como texto e faz toda candidatura parecer indeferida.
+NA_TSE = ['#NULO#', '#NE#', '#NULO', '#NE']
+
 # Esferas: define quais anos são estaduais e quais são municipais. Comparar
 # volume de voto entre esferas não faz sentido (cargos diferentes), então o
 # modelo carrega isso explicitamente.
@@ -91,6 +96,7 @@ FATO_LOCAL_CARGO = {
     'CD_CARGO': 'int8',
     'QT_VOTOS_TOTAL': 'int32',
     'QT_VOTOS_VALIDOS': 'int32',
+    'QT_VOTOS_VALIDOS_OFICIAL': 'int32',
     'QT_VOTOS_NOMINAIS': 'int32',
     'QT_VOTOS_LEGENDA': 'int32',
     'QT_VOTOS_BRANCO': 'int32',
@@ -214,6 +220,8 @@ DIM_VOTAVEL = {
     'NM_URNA': 'string',
     'TP_NOME_ORIGEM': 'string',
     'SQ_CANDIDATO': 'string',
+    'DS_SITUACAO_CANDIDATURA': 'string',
+    'FL_CANDIDATURA_APTA': 'boolean',
     'SK_PARTIDO': 'Int16',
     'SK_POLITICO': 'Int32',
     'DS_SIT_TOT_TURNO': 'string',

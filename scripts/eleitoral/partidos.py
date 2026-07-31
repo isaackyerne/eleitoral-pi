@@ -28,7 +28,7 @@ def _sigla_oficial_por_ano():
     for ano in esquema.ANOS:
         caminho = os.path.join(esquema.DIR_BRUTOS_TSE, f'consulta_cand_{ano}_PI.csv')
         c = pd.read_csv(caminho, sep=';', encoding='latin1', dtype=str,
-                        quotechar='"', na_values=['#NULO#', '#NE#'],
+                        quotechar='"', na_values=esquema.NA_TSE,
                         usecols=['NR_PARTIDO', 'SG_PARTIDO', 'NM_PARTIDO'])
         c = c.drop_duplicates()
         c['ANO_ELEICAO'] = ano

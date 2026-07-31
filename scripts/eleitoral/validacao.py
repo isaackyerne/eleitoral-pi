@@ -12,11 +12,14 @@ VOTOS_POR_ANO = {2018: 9_987_935, 2020: 4_593_905, 2022: 8_456_024, 2024: 4_599_
 TOTAL_VOTOS = sum(VOTOS_POR_ANO.values())
 TOTAL_LINHAS = 1_093_619
 
-# Resultados oficiais, em % dos votos válidos do respectivo recorte.
+# Resultados oficiais, em % dos votos válidos na definição legal — que exclui
+# votos em candidato com registro indeferido. Em 2022 três candidatos a
+# governador estavam inaptos e somaram 30.721 votos: usar o denominador de
+# nominais dá 56,72% para Fonteles, contra os 57,62% publicados.
 OFICIAIS = [
     (2018, 1, 'Governador', None, 'JOSE WELLINGTON BARROSO DE ARAUJO DIAS', 55.65),
     (2020, 2, 'Prefeito', 12190, 'JOSE PESSOA LEAL', 62.31),
-    (2022, 1, 'Governador', None, 'RAFAEL TAJRA FONTELES', 56.72),
+    (2022, 1, 'Governador', None, 'RAFAEL TAJRA FONTELES', 57.62),
     (2024, 1, 'Prefeito', 12190, 'SILVIO MENDES DE OLIVEIRA FILHO', 52.19),
 ]
 
@@ -156,6 +159,8 @@ def _regressao_oficial(t):
                     & dv['TP_VOTO'].eq('Nominal').fillna(False)]
         if municipio is not None:
             escopo = escopo[escopo['CD_MUNICIPIO_UE'].eq(municipio).fillna(False)]
+        # Candidato com registro indeferido não compõe os votos válidos.
+        escopo = escopo[~escopo['FL_CANDIDATURA_APTA'].eq(False).fillna(False)]
         votos = fv[fv['SK_VOTAVEL'].isin(escopo['SK_VOTAVEL'])]
         validos = votos['QT_VOTOS'].sum()
         dele = votos[votos['SK_VOTAVEL'] == int(alvo['SK_VOTAVEL'].iloc[0])]['QT_VOTOS'].sum()

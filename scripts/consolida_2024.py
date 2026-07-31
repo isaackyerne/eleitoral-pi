@@ -24,8 +24,13 @@ e Sílvio Mendes venceu ali com 52,19% dos votos válidos, sem 2º turno.
 """
 
 import os
+import sys
+
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from eleitoral import esquema  # noqa: E402
 
 BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dados')
 BRUTO = os.path.join(BASE, '2024')
@@ -42,7 +47,7 @@ def carrega_votacao():
     df = pd.read_csv(
         os.path.join(BRUTO, ARQ_BU),
         sep=';', encoding='latin1', quotechar='"', dtype=str,
-        na_values=['#NULO#', '#NE#'],
+        na_values=esquema.NA_TSE,
     )
     df.columns = [c.strip() for c in df.columns]
     for c in ['QT_VOTOS', 'QT_APTOS', 'QT_COMPARECIMENTO', 'QT_ABSTENCOES',
@@ -64,7 +69,7 @@ def carrega_eleitorado():
     leitor = pd.read_csv(
         os.path.join(BRUTO, 'eleitorado_local_votacao_2024.csv'),
         sep=';', encoding='latin1', quotechar='"', dtype=str,
-        na_values=['#NULO#', '#NE#'], chunksize=200_000,
+        na_values=esquema.NA_TSE, chunksize=200_000,
     )
     for bloco in leitor:
         bloco.columns = [c.strip() for c in bloco.columns]
