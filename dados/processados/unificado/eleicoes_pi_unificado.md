@@ -20,6 +20,38 @@ fato_local_cargo     41.389   eleição × local × cargo             válidos, 
 fato_local           14.023   eleição × local                     aptos, comparecimento, abstenção
 ```
 
+## Conferência contra os zips (fonte da verdade)
+
+`scripts/verifica_zips.py` lê de dentro dos quatro zips originais, sem tocar na camada
+intermediária nem em nada baixado do TSE, e reconstrói cada número de forma independente.
+**69 checagens, 0 falhas**, nos quatro anos:
+
+- total de votos, e por eleição × turno × cargo
+- votos por município — idênticos nos 224, em todos os anos
+- votos por tipo: nominal, legenda, branco e nulo
+- aptos, comparecimento e abstenções
+- contagem de municípios, zonas e locais
+- **reconciliação linha a linha**: as 1.093.619 linhas conferem voto a voto no grão
+  local × cargo × votável
+
+Rode com `python scripts/verifica_zips.py`; ele sai com código 1 se algo divergir.
+
+### O que não vem dos zips
+
+Estas colunas são enriquecimento vindo dos arquivos de candidatura e resultado do TSE
+(`dados/brutos_tse/`), não do material original. Tudo o mais é derivado dos zips:
+
+| Coluna | Serve para |
+|---|---|
+| `SQ_CANDIDATO` de 2024, `NM_VOTAVEL` legal, `NM_URNA` | o Boletim de Urna só traz nome de urna |
+| `SK_POLITICO`, `dim_politico` | identidade de pessoa, pelo título de eleitor |
+| `FL_ELEITO`, `DS_SIT_TOT_TURNO` | quem foi eleito |
+| `FL_VOTO_VALIDO`, `QT_VOTOS_VALIDOS_OFICIAL` | denominador legal de voto válido |
+| demografia (`DS_GENERO`, `DS_COR_RACA`, `NR_IDADE`…) | perfil do candidato |
+| `fato_oficial_munzona` | agregados publicados, para conferência |
+
+Nenhuma delas altera contagem de voto: `QT_VOTOS` sai inteiramente dos zips.
+
 ## Conferência contra o TSE
 
 `fato_oficial_munzona` (2.771 linhas) traz os agregados **publicados pelo TSE**, do
