@@ -54,16 +54,23 @@ cosmética:
 | Coluna | Definição |
 |---|---|
 | `QT_VOTOS_VALIDOS` | nominais + legenda, tudo que não é branco nem nulo |
-| **`QT_VOTOS_VALIDOS_OFICIAL`** | idem, **menos os votos em candidatos com registro indeferido** — é a definição legal, e a que reproduz os percentuais publicados pelo TSE |
+| **`QT_VOTOS_VALIDOS_OFICIAL`** | idem, **menos os votos em candidatura anulada** — é a definição legal, e a que reproduz os percentuais publicados pelo TSE |
 
-Em 2022, três candidatos a governador estavam com registro indeferido (Coronel Diego
-Melo, Gessy Lima e Lourdes Melo) e somaram 30.721 votos. Pelo denominador simples,
-Rafael Fonteles fica com 56,72%; pelo oficial, com os **57,62%** que o TSE publicou.
-Total descontado por ano: 11.971 (2018), 12.533 (2020), 34.721 (2022).
+Em 2022, três candidatos a governador tiveram os votos anulados (Coronel Diego Melo,
+Gessy Lima e Lourdes Melo, 30.721 votos). Pelo denominador simples, Rafael Fonteles fica
+com 56,72%; pelo oficial, com os **57,62%** que o TSE publicou.
 
-Em 2024 o TSE não publica a situação do registro (o campo vem como `#NE`), então
-`FL_CANDIDATURA_APTA` fica nulo e nada é descontado — as duas colunas são iguais nesse
-ano. **Use `QT_VOTOS_VALIDOS_OFICIAL` como padrão.**
+Anulação **não** é o mesmo que registro indeferido: um candidato apto pode perder os
+votos depois, por julgamento ou cassação. Elizeu Aguiar, senador em 2018, consta como
+APTO e mesmo assim seus 79.781 votos são nulos para o TSE. Quem decide é
+`NM_TIPO_DESTINACAO_VOTOS`, do arquivo oficial por candidato — e é dele que sai
+`FL_VOTO_VALIDO` em `dim_votavel`.
+
+Total descontado por ano: 91.752 (2018, 14 candidaturas), 51.053 (2020, 146), 34.282
+(2022, 21) e 18.085 (2024, 101). **Use `QT_VOTOS_VALIDOS_OFICIAL` como padrão.**
+
+`FL_CANDIDATURA_APTA` continua na base, mas é apenas a situação do registro — informativa,
+e nula em 2024, onde o TSE publica o campo como `#NE`.
 
 ## Tabelas
 
