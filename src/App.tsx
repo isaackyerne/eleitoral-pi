@@ -133,7 +133,7 @@ export default function App() {
                 {titulo}
               </h1>
               <p className="mt-0.5 text-sm text-tinta-2">
-                Base unificada 2018-2024, lida direto do Parquet no navegador.
+                Eleições de 2018 a 2024 no Piauí, a partir dos dados abertos do TSE.
               </p>
             </div>
           </header>
@@ -141,11 +141,11 @@ export default function App() {
           {erro && (
             <div className="rounded-xl border border-[#d03b3b]/30 bg-[#d03b3b]/5 p-5">
               <h2 className="font-medium text-[#d03b3b]">Não foi possível carregar</h2>
-              <p className="mt-1 text-sm text-tinta-2">{erro}</p>
-              <p className="mt-2 text-sm text-tinta-2">
-                Os parquets são servidos de <code>public/dados/</code>. Sincronize com{' '}
-                <code>npm run dados</code>.
+              <p className="mt-1 text-sm text-tinta-2">
+                Os dados do painel não puderam ser lidos. Recarregue a página; se
+                persistir, o arquivo de dados pode não estar disponível.
               </p>
+              <p className="mt-2 text-xs text-tinta-3">{erro}</p>
             </div>
           )}
 
@@ -186,8 +186,8 @@ export default function App() {
           />
 
           <footer className="pt-2 pb-6 text-sm text-tinta-3">
-            Fonte: dados abertos do TSE. Série principal — 1º turno de cada eleição
-            ordinária, sem as suplementares. Votos normalizados por vaga.
+            Fonte: dados abertos do Tribunal Superior Eleitoral. O painel considera
+            o 1º turno das eleições regulares; eleições suplementares ficam de fora.
           </footer>
         </div>
       </main>

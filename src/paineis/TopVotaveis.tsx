@@ -1,5 +1,6 @@
 import type { VotavelTop } from '../dados/consultas'
 import { useTema } from '../estado/tema'
+import { Nota } from '../ui/Nota'
 import { OUTROS, SLOTS, formataInteiro, formataPct } from '../viz/paleta'
 
 /**
@@ -31,16 +32,23 @@ export function TopVotaveis({
 
   return (
     <section className="rounded-xl border borda bg-superficie p-5">
-      <h2 className="text-base font-semibold text-tinta">Mais votados</h2>
+      <div className="flex items-start gap-2">
+        <h2 className="text-base font-semibold text-tinta">Mais votados</h2>
+        <Nota titulo="Sobre a contagem">
+          Em 2018 cada eleitor votou em dois senadores. Para que os cargos e os
+          anos fiquem comparáveis, esses votos são divididos pelo número de
+          vagas.
+        </Nota>
+      </div>
       <p className="mt-1 text-sm text-tinta-2">
-        Do recorte atual, incluindo branco e nulo para dar contexto. Votos
-        normalizados por vaga.
+        A barra mostra o tamanho de cada um em relação ao primeiro colocado.
+        Branco e nulo aparecem na lista para dar a proporção.
       </p>
 
       {carregando ? (
         <p className="mt-5 text-sm text-tinta-3">Carregando…</p>
       ) : !dados.length ? (
-        <p className="mt-5 text-sm text-tinta-3">Nenhum voto neste recorte.</p>
+        <p className="mt-5 text-sm text-tinta-3">Nenhum voto com esses filtros.</p>
       ) : (
         <ol className="mt-5 space-y-2.5">
           {dados.map((d) => (

@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import type { VotoPartido } from '../dados/consultas'
 import { useTema } from '../estado/tema'
+import { Nota } from '../ui/Nota'
 import { SLOTS, OUTROS, TINTA, formataInteiro } from '../viz/paleta'
 
 /**
@@ -61,10 +62,17 @@ export function RankingPartidos({ dados, ano, anos, aoTrocarAno, slots }: Props)
     <section className="rounded-xl border borda bg-superficie p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-tinta">Partidos mais votados</h2>
+          <div className="flex items-start gap-2">
+            <h2 className="text-base font-semibold text-tinta">Partidos mais votados</h2>
+            <Nota titulo="O que entra na conta">
+              Soma os votos nos candidatos do partido e os votos na legenda.
+              Partidos mudam de número entre eleições — a soma acompanha o
+              partido, não o número.
+            </Nota>
+          </div>
           <p className="mt-1 text-sm text-tinta-2">
-            Votos nominais e de legenda, normalizados. Cada partido tem cor fixa:
-            trocar o ano reordena, mas não repinta.
+            Cada partido mantém sua cor ao trocar de ano, então dá para seguir um
+            deles pela série.
           </p>
         </div>
         <div className="flex gap-1" role="group" aria-label="Ano da eleição">

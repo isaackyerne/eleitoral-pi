@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LocalMapa, MunicipioMapa } from '../dados/consultas'
 import { useFiltros } from '../estado/filtros'
+import { Nota } from '../ui/Nota'
 import { useTema } from '../estado/tema'
 import { OUTROS, SLOTS, TINTA, formataInteiro, formataPct } from '../viz/paleta'
 import { caixaDe, corSequencial, projeta, RAMPA_PASSOS } from '../viz/projecao'
@@ -105,7 +106,14 @@ export function Mapa({
   return (
     <section className="rounded-xl border borda bg-superficie">
       <div className="flex flex-wrap items-center gap-2 border-b borda p-3">
-        <h2 className="mr-auto text-base font-semibold text-tinta">Mapa eleitoral</h2>
+        <div className="mr-auto flex items-start gap-2">
+          <h2 className="text-base font-semibold text-tinta">Mapa eleitoral</h2>
+          <Nota titulo="Como ler o mapa">
+            Cada área é um município. Em "por partido", a cor é a do partido que
+            teve mais votos ali — não a margem da vitória, então um município
+            ganho por pouco tem a mesma cor de um ganho de longe.
+          </Nota>
+        </div>
 
         <div role="tablist" aria-label="Camada" className="flex gap-1">
           {([['municipios', 'Municípios'], ['locais', 'Locais de votação']] as const).map(
@@ -230,16 +238,17 @@ export function Mapa({
         <div className="min-w-0">
           {camada === 'locais' ? (
             <p className="text-sm text-tinta-2">
-              {formataInteiro(locais.length)} locais com coordenada.
+              Cada ponto é um local de votação — escola, posto, câmara.
               <span className="mt-1 block text-tinta-3">
-                97,4% dos locais têm geolocalização; os demais somem do mapa mas
-                continuam nos totais.
+                {formataInteiro(locais.length)} têm endereço geolocalizado. Os
+                poucos sem coordenada não aparecem aqui, mas seguem contados nos
+                totais.
               </span>
             </p>
           ) : pintura === 'partido' ? (
             <>
               <h3 className="text-xs font-medium tracking-wide text-tinta-3 uppercase">
-                Municípios vencidos
+                Municípios ganhos
               </h3>
               <ul className="mt-2 space-y-1.5 text-sm">
                 {vencedores.map(([sk, v]) => (
@@ -267,14 +276,13 @@ export function Mapa({
                 <span>{formataPct(faixa.max)}</span>
               </div>
               <p className="mt-3 text-xs text-tinta-3">
-                Uma cor só, variando em luminosidade — a regra para magnitude
-                contínua.
+                Quanto mais escuro, maior a parcela de eleitores que foi votar.
               </p>
             </>
           )}
 
           <p className="mt-4 text-xs text-tinta-3">
-            Clique num município para filtrar o painel.
+            Clique num município para ver só ele no painel.
           </p>
         </div>
       </div>

@@ -76,7 +76,7 @@ export function Tabela({
   return (
     <section className="rounded-xl border borda bg-superficie">
       <div className="flex flex-wrap items-center gap-2 border-b borda p-3">
-        <div role="tablist" aria-label="Granularidade" className="flex gap-1">
+        <div role="tablist" aria-label="Nível de detalhe" className="flex gap-1">
           {ABAS.map((a) => (
             <button
               key={a.id}
@@ -128,7 +128,7 @@ export function Tabela({
         {carregando ? (
           <p className="p-4 text-sm text-tinta-3">Carregando…</p>
         ) : !visiveis.length ? (
-          <p className="p-4 text-sm text-tinta-3">Nenhuma linha para este recorte.</p>
+          <p className="p-4 text-sm text-tinta-3">Nada encontrado com esses filtros.</p>
         ) : (
           <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
             {virtual.getVirtualItems().map((item) => {

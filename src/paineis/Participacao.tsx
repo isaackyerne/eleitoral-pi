@@ -4,6 +4,7 @@ import {
 } from 'recharts'
 import type { Participacao as Dado } from '../dados/consultas'
 import { useTema } from '../estado/tema'
+import { Nota } from '../ui/Nota'
 import { SLOTS, TINTA, formataInteiro, formataPct } from '../viz/paleta'
 
 /**
@@ -50,11 +51,16 @@ export function Participacao({ dados }: { dados: Dado[] }) {
   const COR = { Estadual: SLOTS[modo][0], Municipal: SLOTS[modo][1] } as const
   return (
     <section className="rounded-xl border borda bg-superficie p-5">
-      <h2 className="text-base font-semibold text-tinta">Comparecimento por eleição</h2>
+      <div className="flex items-start gap-2">
+        <h2 className="text-base font-semibold text-tinta">Comparecimento por eleição</h2>
+        <Nota titulo="Como comparar os anos">
+          Anos alternam entre eleição estadual e municipal, com cargos
+          diferentes. O percentual de comparecimento é comparável entre as duas;
+          o volume de votos não seria.
+        </Nota>
+      </div>
       <p className="mt-1 text-sm text-tinta-2">
-        Percentual dos aptos que compareceram. Anos pares alternam entre eleição
-        estadual e municipal — o percentual é comparável entre as duas, o volume
-        de votos não.
+        Cada barra é uma eleição: quanto dos eleitores aptos foi votar.
       </p>
 
       <div className="mt-5 h-64">
