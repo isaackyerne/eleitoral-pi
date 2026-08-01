@@ -56,3 +56,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Cópia dos parquets servida pelo Vite (fonte versionada em dados/processados/unificado/)
+public/dados/
