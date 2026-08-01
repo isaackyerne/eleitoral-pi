@@ -20,20 +20,15 @@
   --color-realce: var(--pi-realce);
 }
 
+/**
+ * Escuro é o padrão, então mora na raiz — assim o primeiro paint já nasce
+ * certo, mesmo antes do JS. O claro é o escopo que sobrescreve.
+ *
+ * 'Seguir o sistema' é resolvido em JS (estado/tema.ts), que sempre grava um
+ * modo concreto em `data-tema`. Por isso não há media query aqui: uma regra a
+ * menos para manter em sincronia com o script inline do index.html.
+ */
 :root {
-  --pi-superficie: #fcfcfb;
-  --pi-plano: #f9f9f7;
-  --pi-tinta: #0b0b0b;
-  --pi-tinta-2: #52514e;
-  --pi-tinta-3: #898781;
-  --pi-grade: #e1e0d9;
-  --pi-eixo: #c3c2b7;
-  --pi-borda: rgb(11 11 11 / 0.1);
-  --pi-realce: #2a78d6;
-  color-scheme: light;
-}
-
-:root[data-tema='escuro'] {
   --pi-superficie: #1a1a19;
   --pi-plano: #0d0d0d;
   --pi-tinta: #ffffff;
@@ -46,20 +41,17 @@
   color-scheme: dark;
 }
 
-/* Sem escolha explícita, segue o sistema. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-tema='claro']):not([data-tema='escuro']) {
-    --pi-superficie: #1a1a19;
-    --pi-plano: #0d0d0d;
-    --pi-tinta: #ffffff;
-    --pi-tinta-2: #c3c2b7;
-    --pi-tinta-3: #898781;
-    --pi-grade: #2c2c2a;
-    --pi-eixo: #383835;
-    --pi-borda: rgb(255 255 255 / 0.1);
-    --pi-realce: #3987e5;
-    color-scheme: dark;
-  }
+:root[data-tema='claro'] {
+  --pi-superficie: #fcfcfb;
+  --pi-plano: #f9f9f7;
+  --pi-tinta: #0b0b0b;
+  --pi-tinta-2: #52514e;
+  --pi-tinta-3: #898781;
+  --pi-grade: #e1e0d9;
+  --pi-eixo: #c3c2b7;
+  --pi-borda: rgb(11 11 11 / 0.1);
+  --pi-realce: #2a78d6;
+  color-scheme: light;
 }
 
 body {

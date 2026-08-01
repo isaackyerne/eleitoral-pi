@@ -1,10 +1,28 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>eleitoral-pi</title>
+    <title>Eleições do Piauí · 2018-2024</title>
+    <meta
+      name="description"
+      content="Painel das eleições do Piauí de 2018 a 2024, a partir dos dados abertos do TSE."
+    />
+    <script>
+      // Aplica o tema antes do primeiro paint. Sem isto a página abriria no
+      // padrão do CSS e piscaria ao trocar, porque o React só roda depois.
+      try {
+        var guardado = JSON.parse(localStorage.getItem('eleitoral-pi:tema') || 'null')
+        var pref = (guardado && guardado.state && guardado.state.preferencia) || 'escuro'
+        if (pref === 'sistema') {
+          pref = matchMedia('(prefers-color-scheme: light)').matches ? 'claro' : 'escuro'
+        }
+        document.documentElement.dataset.tema = pref
+      } catch (e) {
+        document.documentElement.dataset.tema = 'escuro'
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
