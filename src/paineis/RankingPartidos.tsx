@@ -4,7 +4,8 @@ import {
   Tooltip, XAxis, YAxis,
 } from 'recharts'
 import type { VotoPartido } from '../dados/consultas'
-import { TINTA, corDoPartido, formataInteiro } from '../viz/paleta'
+import { useTema } from '../estado/tema'
+import { SLOTS, OUTROS, TINTA, formataInteiro } from '../viz/paleta'
 
 /**
  * Ranking de partidos num ano.
@@ -22,7 +23,7 @@ type Props = {
   ano: number
   anos: number[]
   aoTrocarAno: (ano: number) => void
-  cores: Map<number, string>
+  slots: Map<number, number>
 }
 
 function Dica({
@@ -31,9 +32,9 @@ function Dica({
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
-    <div className="rounded-lg border border-black/10 bg-[#fcfcfb] px-3 py-2 text-sm shadow-lg">
-      <div className="font-medium text-[#0b0b0b]">{d.NM_PARTIDO}</div>
-      <dl className="mt-1 space-y-0.5 text-[#52514e] tabular-nums">
+    <div className="rounded-lg border borda bg-superficie px-3 py-2 text-sm shadow-lg">
+      <div className="font-medium text-tinta">{d.NM_PARTIDO}</div>
+      <dl className="mt-1 space-y-0.5 text-tinta-2 tabular-nums">
         <div className="flex gap-3">
           <dt className="w-20">Votos</dt>
           <dd>{formataInteiro(d.VOTOS)}</dd>
@@ -47,7 +48,9 @@ function Dica({
   )
 }
 
-export function RankingPartidos({ dados, ano, anos, aoTrocarAno, cores }: Props) {
+export function RankingPartidos({ dados, ano, anos, aoTrocarAno, slots }: Props) {
+  const modo = useTema()
+  const t = TINTA[modo]
   const { linhas, total } = useMemo(() => {
     const doAno = dados.filter((d) => d.ANO_ELEICAO === ano)
     const total = doAno.reduce((s, d) => s + d.VOTOS, 0)
@@ -55,11 +58,11 @@ export function RankingPartidos({ dados, ano, anos, aoTrocarAno, cores }: Props)
   }, [dados, ano])
 
   return (
-    <section className="rounded-xl border border-black/10 bg-[#fcfcfb] p-5">
+    <section className="rounded-xl border borda bg-superficie p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-[#0b0b0b]">Partidos mais votados</h2>
-          <p className="mt-1 text-sm text-[#52514e]">
+          <h2 className="text-base font-semibold text-tinta">Partidos mais votados</h2>
+          <p className="mt-1 text-sm text-tinta-2">
             Votos nominais e de legenda, normalizados. Cada partido tem cor fixa:
             trocar o ano reordena, mas não repinta.
           </p>
@@ -72,8 +75,8 @@ export function RankingPartidos({ dados, ano, anos, aoTrocarAno, cores }: Props)
               aria-pressed={a === ano}
               className={`rounded-md px-3 py-1.5 text-sm transition ${
                 a === ano
-                  ? 'bg-[#0b0b0b] font-medium text-white'
-                  : 'text-[#52514e] hover:bg-black/5'
+                  ? 'bg-tinta font-medium text-superficie'
+                  : 'text-tinta-2 hover:bg-tinta/5'
               }`}
             >
               {a}
@@ -89,7 +92,7 @@ export function RankingPartidos({ dados, ano, anos, aoTrocarAno, cores }: Props)
             layout="vertical"
             margin={{ top: 4, right: 76, bottom: 4, left: 4 }}
           >
-            <CartesianGrid stroke={TINTA.claro.grade} horizontal={false} />
+            <CartesianGrid stroke={t.grade} horizontal={false} />
             <XAxis type="number" hide />
             <YAxis
               type="category"
@@ -97,15 +100,15 @@ export function RankingPartidos({ dados, ano, anos, aoTrocarAno, cores }: Props)
               width={92}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: TINTA.claro.secundaria, fontSize: 12 }}
+              tick={{ fill: t.secundaria, fontSize: 12 }}
             />
             <Tooltip
               content={<Dica total={total} />}
-              cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+              cursor={{ fill: 'color-mix(in srgb, currentColor 4%, transparent)' }}
             />
             <Bar dataKey="VOTOS" radius={[0, 4, 4, 0]} barSize={18}>
               {linhas.map((d) => (
-                <Cell key={d.SK_PARTIDO} fill={corDoPartido(cores, d.SK_PARTIDO)} />
+                <Cell key={d.SK_PARTIDO} fill={slots.has(d.SK_PARTIDO) ? SLOTS[modo][slots.get(d.SK_PARTIDO)!] : OUTROS} />
               ))}
               {/* Rótulo direto em todas as barras: alívio de contraste. */}
               <LabelList
@@ -113,7 +116,7 @@ export function RankingPartidos({ dados, ano, anos, aoTrocarAno, cores }: Props)
                 position="right"
                 offset={8}
                 formatter={(v) => (typeof v === 'number' ? formataInteiro(v) : '')}
-                style={{ fill: TINTA.claro.secundaria, fontSize: 12 }}
+                style={{ fill: t.secundaria, fontSize: 12 }}
               />
             </Bar>
           </BarChart>
