@@ -275,7 +275,11 @@ def main():
           f'{len(rejeitadas)} uniões rejeitadas para revisão')
 
     print('resolvendo partidos...')
-    dim_partido, dim_partido_ano = partidos.resolver()
+    # Números que aparecem na votação, para cobrir quem recebeu voto de legenda
+    # sem ter lançado candidato no ano.
+    vistos = set(map(tuple, b.loc[b['NR_PARTIDO'].notna(),
+                                  ['ANO_ELEICAO', 'NR_PARTIDO']].drop_duplicates().values))
+    dim_partido, dim_partido_ano = partidos.resolver(vistos)
 
     print('resolvendo votáveis...')
     dim_votavel, dim_politico = votaveis.resolver(b, dim_eleicao, dim_partido_ano, dim_partido)

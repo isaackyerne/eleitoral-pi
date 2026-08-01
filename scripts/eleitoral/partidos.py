@@ -50,8 +50,39 @@ def _mapa_canonico(ref):
     return mapa
 
 
-def resolver():
-    """Devolve (dim_partido, dim_partido_ano)."""
+def _completa_sem_candidato(observado, vistos, ref):
+    """Acrescenta (ano, número) que recebeu voto mas não tem candidatura.
+
+    Um partido pode não lançar candidato num ano e ainda assim receber voto de
+    legenda — foi o caso do PSDB no Piauí em 2022, com 1.033 votos para Deputado
+    Federal. Como ele não aparece no `consulta_cand` daquele ano, o número
+    ficaria sem partido e o votável sem nome.
+
+    A resolução usa o mesmo número nos demais anos, e só é aceita quando aponta
+    para uma entidade única — se o número tiver trocado de dono no período, é
+    ambíguo e o assert derruba a execução em vez de chutar.
+    """
+    faltando = sorted(set(vistos) - set(map(tuple, observado[['ANO_ELEICAO', 'NR_PARTIDO']].values)))
+    if not faltando:
+        return observado
+    novas = []
+    for ano, nr in faltando:
+        candidatos = observado.loc[observado['NR_PARTIDO'] == nr, 'SK_PARTIDO'].unique()
+        assert len(candidatos) == 1, \
+            f'número {nr} em {ano} sem candidatura e ambíguo entre {len(candidatos)} partidos'
+        sk = int(candidatos[0])
+        nome = ref.loc[ref['SK_PARTIDO'] == sk, 'NM_PARTIDO'].iloc[0]
+        novas.append({'ANO_ELEICAO': ano, 'NR_PARTIDO': nr, 'SK_PARTIDO': sk,
+                      'SG_PARTIDO': pd.NA, 'NM_PARTIDO': nome, 'SG_CANONICA': pd.NA})
+    return pd.concat([observado, pd.DataFrame(novas)], ignore_index=True)
+
+
+def resolver(numeros_vistos=None):
+    """Devolve (dim_partido, dim_partido_ano).
+
+    `numeros_vistos` é o conjunto de pares (ano, número) que aparecem na votação;
+    serve para cobrir partidos que receberam voto sem ter candidato no ano.
+    """
     ref = pd.read_csv(os.path.join(esquema.DIR_REFERENCIA, 'partidos_pi.csv'), dtype=str)
     ref['NR_PARTIDO_ATUAL'] = pd.to_numeric(ref['NR_PARTIDO_ATUAL'])
 
@@ -70,6 +101,9 @@ def resolver():
     observado = observado.merge(
         ref[['SG_PARTIDO', 'SK_PARTIDO']].rename(columns={'SG_PARTIDO': 'SG_CANONICA'}),
         on='SG_CANONICA', how='left', validate='many_to_one')
+
+    if numeros_vistos:
+        observado = _completa_sem_candidato(observado, numeros_vistos, ref)
 
     # Um número é "reatribuído" quando, em algum ano anterior, pertenceu a outra
     # entidade — é o sinal que o dashboard mostra ao cruzar essa fronteira.
