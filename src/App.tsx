@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  kpis, opcoes, participacao, tabela, topVotaveis, votosPorPartidoAno,
+  kpis, mapaLocais, mapaMunicipios, opcoes, participacao, tabela, topVotaveis,
+  votosPorPartidoAno, type LocalMapa, type MunicipioMapa,
   type Granularidade, type Kpis as DadosKpis, type LinhaTabela,
   type OpcaoCargo, type OpcaoEleicao, type OpcaoMunicipio, type OpcaoPartido,
   type Participacao as DadoParticipacao, type VotavelTop, type VotoPartido,
@@ -10,6 +11,7 @@ import { SECOES, useNavegacao } from './estado/navegacao'
 import { useTema } from './estado/tema'
 import { Filtros } from './paineis/Filtros'
 import { Kpis } from './paineis/Kpis'
+import { Mapa } from './paineis/Mapa'
 import { Participacao } from './paineis/Participacao'
 import { RankingPartidos } from './paineis/RankingPartidos'
 import { Tabela } from './paineis/Tabela'
@@ -47,6 +49,8 @@ export default function App() {
     top: VotavelTop[]
     partidos: VotoPartido[]
     linhas: LinhaTabela[]
+    municipios: MunicipioMapa[]
+    locais: LocalMapa[]
   }
   const [carga, setCarga] = useState<Carga | null>(null)
   const pedido = `${chave}|${grao}`
@@ -65,10 +69,14 @@ export default function App() {
     Promise.all([
       kpis(recorte), participacao(recorte), topVotaveis(recorte),
       votosPorPartidoAno(recorte), tabela(recorte, grao),
+      mapaMunicipios(recorte), mapaLocais(recorte),
     ])
-      .then(([k, p, t, pa, tb]) => {
+      .then(([k, p, t, pa, tb, mu, lo]) => {
         if (!vivo) return
-        setCarga({ de: pedido, kpis: k[0] ?? null, participacao: p, top: t, partidos: pa, linhas: tb })
+        setCarga({
+          de: pedido, kpis: k[0] ?? null, participacao: p, top: t,
+          partidos: pa, linhas: tb, municipios: mu, locais: lo,
+        })
       })
       .catch((e: unknown) => {
         if (vivo) setErro(e instanceof Error ? e.message : String(e))
@@ -83,6 +91,8 @@ export default function App() {
   const dadosTop = carga?.top ?? VAZIO
   const dadosPartidos = carga?.partidos ?? VAZIO
   const linhas = carga?.linhas ?? VAZIO
+  const municipios = carga?.municipios ?? VAZIO
+  const locaisMapa = carga?.locais ?? VAZIO
 
   // Slot de cor por partido, do total da série inteira — é o que faz a cor
   // seguir o partido em vez da posição no ranking de cada recorte.
@@ -107,7 +117,8 @@ export default function App() {
       : (anos[anos.length - 1] ?? 0)
 
   const titulo = SECOES.find((s) => s.id === secao)?.rotulo ?? ''
-  const mostra = (q: 'participacao' | 'partidos') => secao === 'visao' || secao === q
+  const mostra = (q: 'mapa' | 'participacao' | 'partidos') =>
+    secao === 'visao' || secao === q
 
   return (
     <div className="min-h-dvh bg-plano md:flex">
@@ -152,6 +163,13 @@ export default function App() {
               <TopVotaveis dados={dadosTop} slots={slots} carregando={carregando} />
               <Participacao dados={dadosPart} />
             </div>
+          )}
+
+          {mostra('mapa') && (
+            <Mapa
+              municipios={municipios} locais={locaisMapa}
+              slots={slots} carregando={carregando}
+            />
           )}
 
           {mostra('participacao') && secao !== 'visao' && <Participacao dados={dadosPart} />}

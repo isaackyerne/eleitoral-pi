@@ -149,6 +149,7 @@ DIM_CARGO = {
 
 DIM_MUNICIPIO = {
     'CD_MUNICIPIO': 'int32',
+    'CD_MUNICIPIO_IBGE': 'Int32',
     'NM_MUNICIPIO': 'string',
     'NM_MUNICIPIO_CHAVE': 'string',
 }

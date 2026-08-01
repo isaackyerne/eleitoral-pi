@@ -191,3 +191,98 @@ export function tabela(f: Filtros, grao: Granularidade) {
     ORDER BY v.VOTOS DESC
   `)
 }
+
+// ─── mapa ────────────────────────────────────────────────────────────────
+
+export type MunicipioMapa = {
+  CD_MUNICIPIO: number; CD_MUNICIPIO_IBGE: number; NM_MUNICIPIO: string
+  VOTOS: number; PCT_COMPARECIMENTO: number | null
+  SK_PARTIDO_VENCEDOR: number | null; SG_PARTIDO_VENCEDOR: string | null
+  NM_VENCEDOR: string | null; PCT_VENCEDOR: number | null
+}
+
+/**
+ * Um registro por município, para o coroplético.
+ *
+ * O vencedor sai por `SK_PARTIDO`, não por número — em 2024 o número 20 é
+ * Podemos e nos anos anteriores era PSC. Só conta voto nominal: legenda não
+ * tem candidato, e branco/nulo não disputam.
+ */
+export function mapaMunicipios(f: Filtros) {
+  const condEleitorado = ['e.FL_SERIE_PRINCIPAL']
+  if (f.skEleicao !== null) condEleitorado.push(`e.SK_ELEICAO = ${f.skEleicao}`)
+
+  return consulta<MunicipioMapa>(`
+    WITH base AS (
+      SELECT l.CD_MUNICIPIO, f.SK_VOTAVEL, v.SK_PARTIDO, v.NM_VOTAVEL, v.NM_URNA, v.TP_VOTO,
+             SUM(f.QT_VOTOS_NORM) AS VOTOS
+      ${FATO} WHERE ${clausulas(f)}
+      GROUP BY 1, 2, 3, 4, 5, 6
+    ),
+    total AS (
+      SELECT CD_MUNICIPIO, CAST(ROUND(SUM(VOTOS)) AS BIGINT) AS VOTOS,
+             SUM(CASE WHEN TP_VOTO = 'Nominal' THEN VOTOS ELSE 0 END) AS NOMINAIS
+      FROM base GROUP BY 1
+    ),
+    vencedor AS (
+      SELECT CD_MUNICIPIO, SK_PARTIDO, NM_VOTAVEL, NM_URNA, VOTOS,
+             ROW_NUMBER() OVER (PARTITION BY CD_MUNICIPIO ORDER BY VOTOS DESC) AS pos
+      FROM base WHERE TP_VOTO = 'Nominal'
+    ),
+    eleitorado AS (
+      SELECT l.CD_MUNICIPIO,
+             ROUND(100.0 * SUM(fl.QT_COMPARECIMENTO) / NULLIF(SUM(fl.QT_APTOS), 0), 2) AS PCT
+      FROM fato_local fl
+      JOIN dim_eleicao e USING (SK_ELEICAO)
+      JOIN dim_local   l ON l.SK_LOCAL = fl.SK_LOCAL AND l.SK_ELEICAO = fl.SK_ELEICAO
+      WHERE ${condEleitorado.join(' AND ')}
+      GROUP BY 1
+    )
+    SELECT m.CD_MUNICIPIO, m.CD_MUNICIPIO_IBGE, m.NM_MUNICIPIO,
+           t.VOTOS, el.PCT AS PCT_COMPARECIMENTO,
+           w.SK_PARTIDO AS SK_PARTIDO_VENCEDOR, p.SG_PARTIDO AS SG_PARTIDO_VENCEDOR,
+           COALESCE(w.NM_URNA, w.NM_VOTAVEL) AS NM_VENCEDOR,
+           ROUND(100.0 * w.VOTOS / NULLIF(t.NOMINAIS, 0), 1) AS PCT_VENCEDOR
+    FROM total t
+    JOIN dim_municipio m USING (CD_MUNICIPIO)
+    LEFT JOIN vencedor w ON w.CD_MUNICIPIO = t.CD_MUNICIPIO AND w.pos = 1
+    LEFT JOIN dim_partido p ON p.SK_PARTIDO = w.SK_PARTIDO
+    LEFT JOIN eleitorado el ON el.CD_MUNICIPIO = t.CD_MUNICIPIO
+  `)
+}
+
+export type LocalMapa = {
+  SK_LOCAL: number; NM_LOCAL: string; NM_MUNICIPIO: string
+  LAT: number; LON: number; VOTOS: number
+  PCT_COMPARECIMENTO: number | null
+}
+
+/** Locais de votação com coordenada — 97,4% do total têm. */
+export function mapaLocais(f: Filtros) {
+  const condEleitorado = ['e.FL_SERIE_PRINCIPAL']
+  if (f.skEleicao !== null) condEleitorado.push(`e.SK_ELEICAO = ${f.skEleicao}`)
+  if (f.cdMunicipio !== null) condEleitorado.push(`l.CD_MUNICIPIO = ${f.cdMunicipio}`)
+
+  return consulta<LocalMapa>(`
+    WITH votos AS (
+      SELECT f.SK_LOCAL, CAST(ROUND(SUM(f.QT_VOTOS_NORM)) AS BIGINT) AS VOTOS
+      ${FATO} WHERE ${clausulas(f)} GROUP BY 1
+    ),
+    eleitorado AS (
+      SELECT fl.SK_LOCAL,
+             ROUND(100.0 * SUM(fl.QT_COMPARECIMENTO) / NULLIF(SUM(fl.QT_APTOS), 0), 2) AS PCT
+      FROM fato_local fl
+      JOIN dim_eleicao e USING (SK_ELEICAO)
+      JOIN dim_local   l ON l.SK_LOCAL = fl.SK_LOCAL AND l.SK_ELEICAO = fl.SK_ELEICAO
+      WHERE ${condEleitorado.join(' AND ')} GROUP BY 1
+    )
+    SELECT v.SK_LOCAL, la.NM_LOCAL_REF AS NM_LOCAL, m.NM_MUNICIPIO,
+           la.LATITUDE_REF AS LAT, la.LONGITUDE_REF AS LON,
+           v.VOTOS, el.PCT AS PCT_COMPARECIMENTO
+    FROM votos v
+    JOIN dim_local_atual la USING (SK_LOCAL)
+    JOIN dim_municipio m ON m.CD_MUNICIPIO = la.CD_MUNICIPIO
+    LEFT JOIN eleitorado el USING (SK_LOCAL)
+    WHERE la.LATITUDE_REF IS NOT NULL
+  `)
+}

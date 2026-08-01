@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 
 export const SECOES = [
   { id: 'visao', rotulo: 'Visão geral' },
+  { id: 'mapa', rotulo: 'Mapa' },
   { id: 'participacao', rotulo: 'Participação' },
   { id: 'partidos', rotulo: 'Partidos' },
 ] as const

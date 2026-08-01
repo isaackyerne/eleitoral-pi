@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "dados": "cp dados/processados/unificado/*.parquet public/dados/",
+    "dados": "cp dados/processados/unificado/*.parquet public/dados/ && cp dados/geo/*.geojson public/dados/",
     "predev": "npm run dados",
     "prebuild": "npm run dados"
   },

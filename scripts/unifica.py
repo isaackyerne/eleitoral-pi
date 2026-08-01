@@ -84,6 +84,18 @@ def monta_dim_municipio(b):
          .sort_values('ANO_ELEICAO').drop_duplicates('CD_MUNICIPIO', keep='last'))
     m['NM_MUNICIPIO'] = canon.texto(m['NM_MUNICIPIO'])
     m['NM_MUNICIPIO_CHAVE'] = canon.chave(m['NM_MUNICIPIO'])
+
+    # O código do TSE (5 dígitos) não é o do IBGE (7), e é o do IBGE que casa
+    # com a geometria. O de-para foi montado por nome normalizado, com os 224
+    # casando exatamente, e vive em referencia/ para ser revisável.
+    caminho = os.path.join(esquema.DIR_REFERENCIA, 'municipios_tse_ibge.csv')
+    if os.path.exists(caminho):
+        de_para = pd.read_csv(caminho, usecols=['CD_MUNICIPIO', 'CD_MUNICIPIO_IBGE'])
+        m = m.merge(de_para, on='CD_MUNICIPIO', how='left', validate='one_to_one')
+        faltando = m['CD_MUNICIPIO_IBGE'].isna().sum()
+        assert faltando == 0, f'{faltando} municípios sem código do IBGE'
+    else:
+        m['CD_MUNICIPIO_IBGE'] = pd.NA
     return esquema.aplica(m.sort_values('CD_MUNICIPIO'), 'dim_municipio')
 
 
