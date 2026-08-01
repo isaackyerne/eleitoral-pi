@@ -179,10 +179,11 @@ def monta_fatos(b, dim_eleicao_cargo, dim_votavel):
     qtd = b.groupby(['SK_ELEICAO', 'SK_LOCAL', 'CD_CARGO']).size().rename('QT_VOTAVEIS').reset_index()
     flc = flc.merge(qtd, on=['SK_ELEICAO', 'SK_LOCAL', 'CD_CARGO'])
 
-    # Denominador na definição legal: voto em candidato com registro indeferido
-    # é nulo, não válido. Só desconta o que se sabe indeferido — em 2024 o TSE
-    # não publica a situação, então nada é descontado ali.
-    inaptos = set(dim_votavel.loc[dim_votavel['FL_CANDIDATURA_APTA'].eq(False), 'SK_VOTAVEL'])
+    # Denominador na definição legal: o TSE não conta como válido o voto em
+    # candidatura anulada. Quem decide isso é FL_VOTO_VALIDO, derivado do
+    # arquivo oficial votacao_candidato_munzona — não a situação do registro,
+    # que ignora anulações posteriores ao pleito.
+    inaptos = set(dim_votavel.loc[dim_votavel['FL_VOTO_VALIDO'].eq(False), 'SK_VOTAVEL'])
     desconto = (b[b['SK_VOTAVEL'].isin(inaptos)]
                 .groupby(['SK_ELEICAO', 'SK_LOCAL', 'CD_CARGO'], as_index=False)['QT_VOTOS'].sum()
                 .rename(columns={'QT_VOTOS': '_desconto'}))
@@ -202,6 +203,54 @@ def monta_fatos(b, dim_eleicao_cargo, dim_votavel):
     fl['PCT_ABSTENCAO'] = (fl['QT_ABSTENCAO'] / fl['QT_APTOS'] * 100).astype('Float32')
     fato_local = esquema.aplica(fl, 'fato_local')
     return fato_votos, fato_local_cargo, fato_local
+
+
+def monta_fato_oficial(dim_eleicao):
+    """Agregados publicados pelo TSE, sem nenhuma derivação nossa.
+
+    Vêm de `detalhe_votacao_munzona`, no grão município × zona × cargo — mais
+    grosso que o da base, que é por local. Servem como referência: qualquer
+    número que vá a público deve bater com esta tabela, e é ela que sustenta a
+    afirmação de que a base reproduz o oficial.
+    """
+    # O arquivo do TSE tem pares de colunas com nome parecido (QT_VOTOS_NULOS e
+    # QT_TOTAL_VOTOS_NULOS): selecionar antes de renomear evita colisão.
+    ren = {
+        'QT_TOTAL_VOTOS_VALIDOS': 'QT_VOTOS_VALIDOS',
+        'QT_VOTOS_NOMINAIS_VALIDOS': 'QT_VOTOS_NOMINAIS_VALIDOS',
+        'QT_TOTAL_VOTOS_LEG_VALIDOS': 'QT_VOTOS_LEGENDA_VALIDOS',
+        'QT_TOTAL_VOTOS_ANULADOS': 'QT_VOTOS_ANULADOS',
+        'QT_TOTAL_VOTOS_ANUL_SUBJUD': 'QT_VOTOS_ANUL_SUBJUD',
+        'QT_VOTOS_BRANCOS': 'QT_VOTOS_BRANCOS',
+        'QT_TOTAL_VOTOS_NULOS': 'QT_VOTOS_NULOS',
+        'QT_ABSTENCOES': 'QT_ABSTENCOES',
+    }
+    chave = ['CD_ELEICAO', 'NR_TURNO', 'CD_MUNICIPIO', 'NR_ZONA', 'CD_CARGO']
+    partes = []
+    for ano in esquema.ANOS:
+        caminho = os.path.join(esquema.DIR_BRUTOS_TSE,
+                               f'detalhe_votacao_munzona_{ano}_PI.csv')
+        if not os.path.exists(caminho):
+            continue
+        d = pd.read_csv(caminho, sep=';', encoding='latin1', dtype=str, quotechar='"',
+                        na_values=esquema.NA_TSE,
+                        usecols=chave + ['QT_APTOS', 'QT_COMPARECIMENTO'] + list(ren))
+        d = d.rename(columns=ren)
+        for c in d.columns:
+            d[c] = pd.to_numeric(d[c], errors='coerce')
+        # O TSE quebra a linha por voto em trânsito. Votos somam; aptos e
+        # comparecimento se repetem entre as linhas, então basta o máximo.
+        g = d.groupby(chave, as_index=False).agg(
+            {**{c: 'sum' for c in ren.values()},
+             'QT_APTOS': 'max', 'QT_COMPARECIMENTO': 'max'})
+        partes.append(g)
+    if not partes:
+        return None
+    o = pd.concat(partes, ignore_index=True)
+    o = o.merge(dim_eleicao[['SK_ELEICAO', 'CD_ELEICAO', 'NR_TURNO']],
+                on=['CD_ELEICAO', 'NR_TURNO'], how='inner', validate='many_to_one')
+    return esquema.aplica(o, 'fato_oficial_munzona').sort_values(
+        ['SK_ELEICAO', 'CD_MUNICIPIO', 'NR_ZONA', 'CD_CARGO']).reset_index(drop=True)
 
 
 def main():
@@ -245,6 +294,7 @@ def main():
     dim_local = monta_dim_local(b, sk_local, dim_eleicao)
     dim_local_atual = monta_dim_local_atual(dim_local, sk_local, zonas)
     fato_votos, fato_local_cargo, fato_local = monta_fatos(b, dim_eleicao_cargo, dim_votavel)
+    fato_oficial = monta_fato_oficial(dim_eleicao)
 
     tabelas = {
         'fato_votos': fato_votos, 'fato_local_cargo': fato_local_cargo, 'fato_local': fato_local,
@@ -253,6 +303,8 @@ def main():
         'dim_partido': dim_partido, 'dim_partido_ano': dim_partido_ano,
         'dim_votavel': dim_votavel, 'dim_politico': dim_politico,
     }
+    if fato_oficial is not None:
+        tabelas['fato_oficial_munzona'] = fato_oficial
 
     print('validando...')
     validacao.rodar(tabelas, b)

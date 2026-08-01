@@ -20,6 +20,32 @@ fato_local_cargo     41.389   eleição × local × cargo             válidos, 
 fato_local           14.023   eleição × local                     aptos, comparecimento, abstenção
 ```
 
+## Conferência contra o TSE
+
+`fato_oficial_munzona` (2.771 linhas) traz os agregados **publicados pelo TSE**, do
+arquivo `detalhe_votacao_munzona`, sem nenhuma derivação nossa. O grão é município ×
+zona × cargo, mais grosso que o da base. **Para qualquer número que vá a público, é esta
+a referência.**
+
+Comparando a base com ela:
+
+| Confere exatamente | Resíduo |
+|---|---|
+| Comparecimento e abstenções, nas 4 eleições ordinárias | — |
+| Total de votos, brancos e nulos, em todos os cargos | — |
+| Votos válidos oficiais em **11 das 15** combinações eleição × cargo | — |
+| Aptos de 2018 | +7 eleitores (0,0003%) |
+| Válidos: Vereador 2020 | +1.410 (0,07%) |
+| Válidos: Dep. Federal 2022 | +127 (0,006%) |
+| Válidos: Prefeito e Vereador 2024 | −6.428 e −4.658 (0,3% e 0,2%) |
+
+O resíduo vem de `QT_VOTOS_VALIDOS_OFICIAL` ser **derivado**: o TSE publica a anulação
+por município/zona, não por local, então a base decide candidatura a candidatura se o
+voto entrou nos válidos. A regra acerta na esmagadora maioria, mas em 2024 há 57
+candidaturas que recebem voto no Boletim de Urna e somem do arquivo oficial sem terem
+sido anuladas — e nenhum campo publicado distingue esse caso de uma anulação real. A
+suíte de validação trava o resíduo em 0,4%: qualquer piora derruba o pipeline.
+
 ## Qual denominador usar para percentual
 
 `fato_local_cargo` traz **dois** totais de votos válidos, e a diferença entre eles não é
@@ -56,6 +82,7 @@ ano. **Use `QT_VOTOS_VALIDOS_OFICIAL` como padrão.**
 | `dim_partido_ano` | 117 | ano × número → partido |
 | `dim_votavel` | 20.747 | votável dentro de uma eleição |
 | `dim_politico` | 14.363 | pessoa, pelo título de eleitor |
+| `fato_oficial_munzona` | 2.771 | agregados publicados pelo TSE (município × zona × cargo) |
 
 ## Como consultar
 
@@ -148,6 +175,8 @@ fusão silenciosa:
 - nenhum político aparece duas vezes na mesma disputa
 - `QT_APTOS = QT_COMPARECIMENTO + QT_ABSTENCAO`, e só as suplementares ficam sem eleitorado
 - votos no cargo de voto único = comparecimento, em cada eleição ordinária
+- agregados do TSE conferidos: comparecimento exato nas 4 ordinárias, válidos exatos em
+  11 das 15 combinações eleição × cargo, resíduo travado em 0,4%
 - resultados oficiais reproduzidos, pelo denominador legal: Wellington Dias 55,65%
   (2018), Dr. Pessoa 62,31% (2º turno 2020), Rafael Fonteles 57,62% (2022), Sílvio
   Mendes 52,19% (Teresina 2024)

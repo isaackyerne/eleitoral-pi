@@ -55,6 +55,46 @@ def carrega_candidaturas():
     return c
 
 
+def destinacao_oficial():
+    """Quais votos o TSE contou como válidos, por candidatura.
+
+    `DS_SITUACAO_CANDIDATURA` diz se o registro foi deferido, mas não basta: um
+    candidato apto pode ter os votos anulados depois, por julgamento ou cassação.
+    A resposta oficial está em `votacao_candidato_munzona`, no campo
+    `NM_TIPO_DESTINACAO_VOTOS` e na diferença entre `QT_VOTOS_NOMINAIS` e
+    `QT_VOTOS_NOMINAIS_VALIDOS`.
+
+    O mecanismo muda de ano: em 2022 e 2024 a candidatura anulada aparece com
+    destinação "Anulado"; em 2018 e 2020 ela é simplesmente **omitida** do
+    arquivo — foi o que aconteceu com Elizeu Aguiar, senador em 2018, cujos
+    79.781 votos o TSE contabiliza como nulos.
+
+    Destinações que contam como válido: "Válido" e "Válido (legenda)" — nesta
+    última o voto migra para a legenda do partido, mas continua válido. Ficam de
+    fora "Anulado" e "Anulado sub judice".
+
+    Daí a leitura de uma ausência depender do ano: onde o arquivo lista
+    anulações explícitas, quem não está lá é só um registro faltante e o TSE
+    conta seus votos como válidos; onde não lista nenhuma, a ausência **é** a
+    anulação. Devolve (mapa SQ->válido, mapa ano->lista anulações).
+    """
+    valido, lista_anulacao = {}, {}
+    for ano in esquema.ANOS:
+        caminho = os.path.join(esquema.DIR_BRUTOS_TSE,
+                               f'votacao_candidato_munzona_{ano}_PI.csv')
+        if not os.path.exists(caminho):
+            continue
+        v = pd.read_csv(caminho, sep=';', encoding='latin1', dtype=str, quotechar='"',
+                        na_values=esquema.NA_TSE,
+                        usecols=['SQ_CANDIDATO', 'NM_TIPO_DESTINACAO_VOTOS'])
+        destino = v['NM_TIPO_DESTINACAO_VOTOS'].fillna('Válido')
+        conta = destino.str.startswith('Válido')
+        agregado = conta.groupby(v['SQ_CANDIDATO']).any()
+        valido.update(agregado.items())
+        lista_anulacao[ano] = bool((~conta).any())
+    return valido, lista_anulacao
+
+
 def _idade(dt_nasc, ano):
     d = pd.to_datetime(dt_nasc, format='%d/%m/%Y', errors='coerce')
     return (ano - d.dt.year).astype('Int16')
@@ -137,11 +177,22 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     m['NM_VOTAVEL_CHAVE'] = canon.chave(m['NM_VOTAVEL'])
     m['NM_URNA'] = canon.texto(m['NM_URNA_CANDIDATO'])
 
-    # Voto em candidato com registro indeferido não entra nos votos válidos
-    # oficiais. Em 2024 o TSE publica a situação como "#NE", então o valor fica
-    # nulo — desconhecido, não "apto".
+    # Situação do registro: informativa. Em 2024 o TSE publica como "#NE", então
+    # fica nula — desconhecida, não "apta".
     situ = m['DS_SITUACAO_CANDIDATURA'].astype('string')
     m['FL_CANDIDATURA_APTA'] = situ.eq('APTO').where(situ.notna() & nominal).astype('boolean')
+
+    # Se o voto entrou nos válidos oficiais — é isto, e não a situação do
+    # registro, que reproduz os percentuais publicados pelo TSE.
+    dest, _ = destinacao_oficial()
+    m['FL_VOTO_VALIDO'] = m['SQ_CANDIDATO'].map(dest).where(nominal).astype('boolean')
+    # Candidatura que não consta do arquivo oficial de votação é tratada como
+    # anulada. Vale para a maioria dos casos (Elizeu Aguiar em 2018, Diego Melo
+    # em 2022), mas erra em 2024, onde 57 candidaturas somem do arquivo sem
+    # terem sido anuladas — daí o resíduo de ~0,3% documentado no dicionário.
+    # Nenhum campo publicado distingue os dois casos; para o número oficial
+    # exato use fato_oficial_munzona.
+    m.loc[nominal & m['FL_VOTO_VALIDO'].isna(), 'FL_VOTO_VALIDO'] = False
 
     m['FL_ELEITO'] = m['DS_SIT_TOT_TURNO'].str.upper().str.startswith('ELEITO')
     m['FL_ELEITO'] = m['FL_ELEITO'].where(nominal, pd.NA).astype('boolean')
@@ -159,7 +210,7 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     esp = m[m['TP_VOTO'].isin(['Branco', 'Nulo'])].drop_duplicates('TP_VOTO').copy()
     for c in ['SK_ELEICAO', 'CD_MUNICIPIO_UE', 'CD_CARGO', 'NR_VOTAVEL', 'SQ_CANDIDATO',
               'SK_PARTIDO', 'NM_URNA', 'TP_NOME_ORIGEM', 'DS_SITUACAO_CANDIDATURA',
-              'FL_CANDIDATURA_APTA', 'DS_SIT_TOT_TURNO',
+              'FL_CANDIDATURA_APTA', 'FL_VOTO_VALIDO', 'DS_SIT_TOT_TURNO',
               'DS_GENERO', 'DS_COR_RACA', 'DS_GRAU_INSTRUCAO', 'DS_OCUPACAO',
               'NR_IDADE', 'SG_FEDERACAO']:
         esp[c] = pd.NA

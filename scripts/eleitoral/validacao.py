@@ -187,6 +187,40 @@ def _prefeituras(t):
                 f'{ano}: {sg} com {int(contagem.get(sg, 0))} prefeituras, esperado {qt}'
 
 
+def _contra_oficial(t):
+    """Confere a base contra os agregados publicados pelo TSE.
+
+    Aptos, comparecimento e votos por cargo têm de bater exatamente. O total de
+    votos válidos é derivado (o TSE não publica a anulação por local), então
+    aceita-se um resíduo pequeno, travado aqui para que qualquer piora falhe.
+    """
+    if 'fato_oficial_munzona' not in t:
+        return
+    o = t['fato_oficial_munzona']
+    fl, flc = t['fato_local'], t['fato_local_cargo']
+
+    por_eleicao = o.drop_duplicates(['SK_ELEICAO', 'CD_MUNICIPIO', 'NR_ZONA', 'CD_CARGO'])
+    um_cargo = por_eleicao.sort_values('CD_CARGO').drop_duplicates(
+        ['SK_ELEICAO', 'CD_MUNICIPIO', 'NR_ZONA'])
+    ofi = um_cargo.groupby('SK_ELEICAO')[['QT_APTOS', 'QT_COMPARECIMENTO']].sum()
+    base = fl.groupby('SK_ELEICAO')[['QT_APTOS', 'QT_COMPARECIMENTO']].sum()
+    # Suplementares ficam de fora: o cadastro de eleitorado disponível é o de
+    # 2020 e não o da data em que ocorreram, então a base não tem seus aptos.
+    ordinarias = set(t['dim_eleicao'].loc[~t['dim_eleicao']['FL_SUPLEMENTAR'], 'SK_ELEICAO'])
+    for sk in [x for x in ofi.index.intersection(base.index) if x in ordinarias]:
+        dif = abs(int(base.loc[sk, 'QT_COMPARECIMENTO']) - int(ofi.loc[sk, 'QT_COMPARECIMENTO']))
+        assert dif == 0, f'eleição {sk}: comparecimento difere do TSE em {dif}'
+
+    # Válidos: resíduo tolerado, por cargo, em pontos-base do total.
+    ov = o.groupby(['SK_ELEICAO', 'CD_CARGO'])['QT_VOTOS_VALIDOS'].sum()
+    bv = flc.groupby(['SK_ELEICAO', 'CD_CARGO'])['QT_VOTOS_VALIDOS_OFICIAL'].sum()
+    for k in ov.index.intersection(bv.index):
+        tse, base_v = int(ov[k]), int(bv[k])
+        erro = abs(base_v - tse) / max(tse, 1)
+        assert erro <= 0.004, \
+            f'eleição {k[0]} cargo {k[1]}: válidos divergem {erro*100:.2f}% do TSE ({base_v:,} x {tse:,})'
+
+
 def rodar(tabelas, bronze):
     t = dict(tabelas)
     # DS_CARGO ajuda os testes; vem de dim_eleicao_cargo.
@@ -201,4 +235,5 @@ def rodar(tabelas, bronze):
     _comparecimento(t)
     _regressao_oficial(t)
     _prefeituras(t)
+    _contra_oficial(t)
     print('  todas as verificações passaram')

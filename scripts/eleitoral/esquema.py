@@ -222,6 +222,7 @@ DIM_VOTAVEL = {
     'SQ_CANDIDATO': 'string',
     'DS_SITUACAO_CANDIDATURA': 'string',
     'FL_CANDIDATURA_APTA': 'boolean',
+    'FL_VOTO_VALIDO': 'boolean',
     'SK_PARTIDO': 'Int16',
     'SK_POLITICO': 'Int32',
     'DS_SIT_TOT_TURNO': 'string',
@@ -232,6 +233,26 @@ DIM_VOTAVEL = {
     'DS_OCUPACAO': 'string',
     'NR_IDADE': 'Int16',
     'SG_FEDERACAO': 'string',
+}
+
+# Agregados publicados pelo TSE em detalhe_votacao_munzona. Grão município x
+# zona, mais grosso que o da base, mas é a referência oficial: qualquer número
+# divulgado deve sair daqui.
+FATO_OFICIAL_MUNZONA = {
+    'SK_ELEICAO': 'int16',
+    'CD_MUNICIPIO': 'int32',
+    'NR_ZONA': 'int16',
+    'CD_CARGO': 'int8',
+    'QT_APTOS': 'int32',
+    'QT_COMPARECIMENTO': 'int32',
+    'QT_ABSTENCOES': 'int32',
+    'QT_VOTOS_VALIDOS': 'int32',
+    'QT_VOTOS_NOMINAIS_VALIDOS': 'int32',
+    'QT_VOTOS_LEGENDA_VALIDOS': 'int32',
+    'QT_VOTOS_ANULADOS': 'int32',
+    'QT_VOTOS_ANUL_SUBJUD': 'int32',
+    'QT_VOTOS_BRANCOS': 'int32',
+    'QT_VOTOS_NULOS': 'int32',
 }
 
 DIM_POLITICO = {
@@ -256,6 +277,7 @@ TABELAS = {
     'dim_partido_ano': DIM_PARTIDO_ANO,
     'dim_votavel': DIM_VOTAVEL,
     'dim_politico': DIM_POLITICO,
+    'fato_oficial_munzona': FATO_OFICIAL_MUNZONA,
 }
 
 # Votáveis não-nominais recebem chave global, para que "Nulo em 2020" e
