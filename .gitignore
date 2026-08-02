@@ -23,6 +23,7 @@ dados/brutos_tse/
 
 # Notas de contexto locais
 CLAUDE.md
+.claude/settings.local.json
 
 # Python
 __pycache__/
