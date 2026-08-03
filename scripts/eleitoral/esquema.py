@@ -186,6 +186,9 @@ DIM_LOCAL_ATUAL = {
     'LONGITUDE_REF': 'float64',
     'ANO_GEO_REF': 'Int16',
     'FL_GEO_DIVERGENTE': 'bool',
+    # Coordenada não veio do TSE: o local não tem geocodificação em nenhum dos
+    # 4 anos, e a referência é estimada (ver `locais_geo_manual.csv`).
+    'FL_GEO_ESTIMADA': 'bool',
     'TP_VINCULO': 'string',
     'ANOS_PRESENTE': 'string',
     'QT_ANOS': 'int8',

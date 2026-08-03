@@ -127,6 +127,22 @@ def monta_dim_local(b, sk_local, dim_eleicao):
     return esquema.aplica(d, 'dim_local').sort_values(['SK_LOCAL', 'SK_ELEICAO']).reset_index(drop=True)
 
 
+def _geo_manual():
+    """Coordenadas estimadas para locais que o TSE nunca geocodificou.
+
+    `locais_geo_manual.csv` vem de geocodificação por endereço (Nominatim/OSM),
+    com confiança marcada por linha — 'endereco' (rua+número), 'localidade'
+    (povoado/bairro rural) ou 'municipio' (só o centro, último recurso). Só
+    preenche onde o TSE não deu nenhuma coordenada nos 4 anos; nunca sobrescreve
+    uma coordenada real.
+    """
+    caminho = os.path.join(esquema.DIR_REFERENCIA, 'locais_geo_manual.csv')
+    if not os.path.exists(caminho):
+        return pd.DataFrame(columns=['SK_LOCAL', 'LATITUDE', 'LONGITUDE']).set_index('SK_LOCAL')
+    g = pd.read_csv(caminho)
+    return g[['SK_LOCAL', 'LATITUDE', 'LONGITUDE']].set_index('SK_LOCAL')
+
+
 def monta_dim_local_atual(dim_local, sk_local, zonas):
     """Identidade do local + coordenada de referência.
 
@@ -134,7 +150,8 @@ def monta_dim_local_atual(dim_local, sk_local, zonas):
     mudança física: {2020,2024} batem em 94% e {2018,2022} em 71%, mas cruzado
     cai para 4-9%, com diferença na 4ª-7ª casa decimal. Uma referência única, do
     ano mais recente que tenha coordenada, estabiliza o mapa e aproveita a
-    melhor cobertura (2024).
+    melhor cobertura (2024). Onde nenhum ano tem coordenada, cai para a
+    estimativa manual em `_geo_manual` — `FL_GEO_ESTIMADA` marca essas linhas.
     """
     d = dim_local.sort_values('ANO_ELEICAO')
     geo = d[d['LATITUDE'].notna()].drop_duplicates('SK_LOCAL', keep='last')
@@ -149,6 +166,13 @@ def monta_dim_local_atual(dim_local, sk_local, zonas):
     a['LATITUDE_REF'] = a['SK_LOCAL'].map(ref['LATITUDE'])
     a['LONGITUDE_REF'] = a['SK_LOCAL'].map(ref['LONGITUDE'])
     a['ANO_GEO_REF'] = a['SK_LOCAL'].map(ref['ANO_ELEICAO']).astype('Int16')
+
+    manual = _geo_manual()
+    a['FL_GEO_ESTIMADA'] = a['LATITUDE_REF'].isna() & a['SK_LOCAL'].isin(manual.index)
+    sem_tse = a['FL_GEO_ESTIMADA']
+    a.loc[sem_tse, 'LATITUDE_REF'] = a.loc[sem_tse, 'SK_LOCAL'].map(manual['LATITUDE'])
+    a.loc[sem_tse, 'LONGITUDE_REF'] = a.loc[sem_tse, 'SK_LOCAL'].map(manual['LONGITUDE'])
+
     a['NM_LOCAL_CHAVE'] = canon.chave(a['NM_LOCAL_REF'])
     a['QT_ANOS'] = a['QT_ANOS'].astype('int8')
     a['FL_PAINEL_COMPLETO'] = a['QT_ANOS'].eq(len(esquema.ANOS))
