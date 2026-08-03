@@ -56,16 +56,31 @@ export function conecta(): Promise<duckdb.AsyncDuckDBConnection> {
   return conexao
 }
 
+// Duas consultas com o mesmo texto disparadas no mesmo instante (comum
+// quando vários seletores independentes nascem com o mesmo cargo/eleição
+// padrão, como no Cruzamento) precisam compartilhar a mesma promise — pedir
+// a mesma query duas vezes em paralelo à mesma AsyncDuckDBConnection faz uma
+// das duas voltar vazia.
+const emVoo = new Map<string, Promise<Record<string, unknown>[]>>()
+
 /** Roda SQL e devolve as linhas já como objetos JS. */
-export async function consulta<T = Record<string, unknown>>(sql: string): Promise<T[]> {
-  const con = await conecta()
-  const resultado = await con.query(sql)
-  return resultado.toArray().map((linha) => {
-    const obj = linha.toJSON() as Record<string, unknown>
-    // O Arrow devolve inteiros grandes como BigInt, que quebra o Recharts.
-    for (const [k, v] of Object.entries(obj)) {
-      if (typeof v === 'bigint') obj[k] = Number(v)
-    }
-    return obj as T
-  })
+export function consulta<T = Record<string, unknown>>(sql: string): Promise<T[]> {
+  const existente = emVoo.get(sql)
+  if (existente) return existente as Promise<T[]>
+
+  const pedido = (async () => {
+    const con = await conecta()
+    const resultado = await con.query(sql)
+    return resultado.toArray().map((linha) => {
+      const obj = linha.toJSON() as Record<string, unknown>
+      // O Arrow devolve inteiros grandes como BigInt, que quebra o Recharts.
+      for (const [k, v] of Object.entries(obj)) {
+        if (typeof v === 'bigint') obj[k] = Number(v)
+      }
+      return obj
+    })
+  })()
+  emVoo.set(sql, pedido)
+  pedido.finally(() => emVoo.delete(sql))
+  return pedido as Promise<T[]>
 }

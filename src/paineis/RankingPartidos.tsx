@@ -4,7 +4,9 @@ import {
   Tooltip, XAxis, YAxis,
 } from 'recharts'
 import type { VotoPartido } from '../dados/consultas'
+import { useColapso } from '../estado/colapso'
 import { useTema } from '../estado/tema'
+import { BotaoColapsar } from '../ui/BotaoColapsar'
 import { Nota } from '../ui/Nota'
 import { SLOTS, OUTROS, TINTA, formataInteiro } from '../viz/paleta'
 
@@ -52,6 +54,8 @@ function Dica({
 export function RankingPartidos({ dados, ano, anos, aoTrocarAno, slots }: Props) {
   const modo = useTema()
   const t = TINTA[modo]
+  const colapsado = useColapso((s) => s.colapsados['ranking-partidos'] ?? false)
+  const alternar = useColapso((s) => s.alternar)
   const { linhas, total } = useMemo(() => {
     const doAno = dados.filter((d) => d.ANO_ELEICAO === ano)
     const total = doAno.reduce((s, d) => s + d.VOTOS, 0)
@@ -75,61 +79,66 @@ export function RankingPartidos({ dados, ano, anos, aoTrocarAno, slots }: Props)
             deles pela série.
           </p>
         </div>
-        <div className="flex gap-1" role="group" aria-label="Ano da eleição">
-          {anos.map((a) => (
-            <button
-              key={a}
-              onClick={() => aoTrocarAno(a)}
-              aria-pressed={a === ano}
-              className={`rounded-md px-3 py-1.5 text-sm transition ${
-                a === ano
-                  ? 'bg-tinta font-medium text-superficie'
-                  : 'text-tinta-2 hover:bg-tinta/5'
-              }`}
-            >
-              {a}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1" role="group" aria-label="Ano da eleição">
+            {anos.map((a) => (
+              <button
+                key={a}
+                onClick={() => aoTrocarAno(a)}
+                aria-pressed={a === ano}
+                className={`rounded-md px-3 py-1.5 text-sm transition ${
+                  a === ano
+                    ? 'bg-tinta font-medium text-superficie'
+                    : 'text-tinta-2 hover:bg-tinta/5'
+                }`}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+          <BotaoColapsar aberto={!colapsado} aoAlternar={() => alternar('ranking-partidos')} rotulo="Partidos mais votados" />
         </div>
       </div>
 
-      <div className="mt-5" style={{ height: linhas.length * 34 + 32 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={linhas}
-            layout="vertical"
-            margin={{ top: 4, right: 76, bottom: 4, left: 4 }}
-          >
-            <CartesianGrid stroke={t.grade} horizontal={false} />
-            <XAxis type="number" hide />
-            <YAxis
-              type="category"
-              dataKey="SG_PARTIDO"
-              width={92}
-              tickLine={false}
-              axisLine={false}
-              tick={{ fill: t.secundaria, fontSize: 12 }}
-            />
-            <Tooltip
-              content={<Dica total={total} />}
-              cursor={{ fill: 'color-mix(in srgb, currentColor 4%, transparent)' }}
-            />
-            <Bar dataKey="VOTOS" radius={[0, 4, 4, 0]} barSize={18}>
-              {linhas.map((d) => (
-                <Cell key={d.SK_PARTIDO} fill={slots.has(d.SK_PARTIDO) ? SLOTS[modo][slots.get(d.SK_PARTIDO)!] : OUTROS} />
-              ))}
-              {/* Rótulo direto em todas as barras: alívio de contraste. */}
-              <LabelList
-                dataKey="VOTOS"
-                position="right"
-                offset={8}
-                formatter={(v) => (typeof v === 'number' ? formataInteiro(v) : '')}
-                style={{ fill: t.secundaria, fontSize: 12 }}
+      {!colapsado && (
+        <div className="mt-5" style={{ height: linhas.length * 34 + 32 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={linhas}
+              layout="vertical"
+              margin={{ top: 4, right: 76, bottom: 4, left: 4 }}
+            >
+              <CartesianGrid stroke={t.grade} horizontal={false} />
+              <XAxis type="number" hide />
+              <YAxis
+                type="category"
+                dataKey="SG_PARTIDO"
+                width={92}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fill: t.secundaria, fontSize: 12 }}
               />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+              <Tooltip
+                content={<Dica total={total} />}
+                cursor={{ fill: 'color-mix(in srgb, currentColor 4%, transparent)' }}
+              />
+              <Bar dataKey="VOTOS" radius={[0, 4, 4, 0]} barSize={18}>
+                {linhas.map((d) => (
+                  <Cell key={d.SK_PARTIDO} fill={slots.has(d.SK_PARTIDO) ? SLOTS[modo][slots.get(d.SK_PARTIDO)!] : OUTROS} />
+                ))}
+                {/* Rótulo direto em todas as barras: alívio de contraste. */}
+                <LabelList
+                  dataKey="VOTOS"
+                  position="right"
+                  offset={8}
+                  formatter={(v) => (typeof v === 'number' ? formataInteiro(v) : '')}
+                  style={{ fill: t.secundaria, fontSize: 12 }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </section>
   )
 }

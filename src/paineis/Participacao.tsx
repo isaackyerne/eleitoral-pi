@@ -3,7 +3,9 @@ import {
   Tooltip, XAxis, YAxis,
 } from 'recharts'
 import type { Participacao as Dado } from '../dados/consultas'
+import { useColapso } from '../estado/colapso'
 import { useTema } from '../estado/tema'
+import { BotaoColapsar } from '../ui/BotaoColapsar'
 import { Nota } from '../ui/Nota'
 import { SLOTS, TINTA, formataInteiro, formataPct } from '../viz/paleta'
 
@@ -48,6 +50,8 @@ function Dica({ active, payload }: { active?: boolean; payload?: { payload: Dado
 export function Participacao({ dados }: { dados: Dado[] }) {
   const modo = useTema()
   const t = TINTA[modo]
+  const colapsado = useColapso((s) => s.colapsados.participacao ?? false)
+  const alternar = useColapso((s) => s.alternar)
   const COR = { Estadual: SLOTS[modo][0], Municipal: SLOTS[modo][1] } as const
   return (
     <section className="rounded-xl border borda bg-superficie p-5">
@@ -58,60 +62,66 @@ export function Participacao({ dados }: { dados: Dado[] }) {
           diferentes. O percentual de comparecimento é comparável entre as duas;
           o volume de votos não seria.
         </Nota>
-      </div>
-      <p className="mt-1 text-sm text-tinta-2">
-        Cada barra é uma eleição: quanto dos eleitores aptos foi votar.
-      </p>
-
-      <div className="mt-5 h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={dados} margin={{ top: 20, right: 8, bottom: 4, left: 8 }}>
-            <CartesianGrid stroke={t.grade} vertical={false} />
-            <XAxis
-              dataKey="ANO_ELEICAO"
-              tickLine={false}
-              axisLine={{ stroke: t.eixo }}
-              tick={{ fill: t.suave, fontSize: 12 }}
-            />
-            <YAxis
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
-              tickLine={false}
-              axisLine={false}
-              width={38}
-              tick={{ fill: t.suave, fontSize: 12 }}
-              tickFormatter={(v: number) => `${v}%`}
-            />
-            <Tooltip content={<Dica />} cursor={{ fill: 'color-mix(in srgb, currentColor 4%, transparent)' }} />
-            <Bar dataKey="PCT_COMPARECIMENTO" radius={[4, 4, 0, 0]} maxBarSize={72}>
-              {dados.map((d) => (
-                <Cell key={d.ANO_ELEICAO} fill={COR[d.TP_ESFERA as keyof typeof COR]} />
-              ))}
-              {/* Rótulo direto: é o alívio exigido pelos slots de baixo contraste. */}
-              <LabelList
-                dataKey="PCT_COMPARECIMENTO"
-                position="top"
-                offset={8}
-                formatter={(v) => (typeof v === 'number' ? formataPct(v) : '')}
-                style={{ fill: t.secundaria, fontSize: 12 }}
-              />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <BotaoColapsar aberto={!colapsado} aoAlternar={() => alternar('participacao')} rotulo="Comparecimento por eleição" />
       </div>
 
-      <ul className="mt-4 flex gap-4 text-sm text-tinta-2">
-        {(['Estadual', 'Municipal'] as const).map((esfera) => (
-          <li key={esfera} className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className="size-2.5 rounded-full"
-              style={{ background: COR[esfera] }}
-            />
-            {esfera}
-          </li>
-        ))}
-      </ul>
+      {!colapsado && (
+        <>
+          <p className="mt-1 text-sm text-tinta-2">
+            Cada barra é uma eleição: quanto dos eleitores aptos foi votar.
+          </p>
+
+          <div className="mt-5 h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dados} margin={{ top: 20, right: 8, bottom: 4, left: 8 }}>
+                <CartesianGrid stroke={t.grade} vertical={false} />
+                <XAxis
+                  dataKey="ANO_ELEICAO"
+                  tickLine={false}
+                  axisLine={{ stroke: t.eixo }}
+                  tick={{ fill: t.suave, fontSize: 12 }}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  ticks={[0, 25, 50, 75, 100]}
+                  tickLine={false}
+                  axisLine={false}
+                  width={38}
+                  tick={{ fill: t.suave, fontSize: 12 }}
+                  tickFormatter={(v: number) => `${v}%`}
+                />
+                <Tooltip content={<Dica />} cursor={{ fill: 'color-mix(in srgb, currentColor 4%, transparent)' }} />
+                <Bar dataKey="PCT_COMPARECIMENTO" radius={[4, 4, 0, 0]} maxBarSize={72}>
+                  {dados.map((d) => (
+                    <Cell key={d.ANO_ELEICAO} fill={COR[d.TP_ESFERA as keyof typeof COR]} />
+                  ))}
+                  {/* Rótulo direto: é o alívio exigido pelos slots de baixo contraste. */}
+                  <LabelList
+                    dataKey="PCT_COMPARECIMENTO"
+                    position="top"
+                    offset={8}
+                    formatter={(v) => (typeof v === 'number' ? formataPct(v) : '')}
+                    style={{ fill: t.secundaria, fontSize: 12 }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <ul className="mt-4 flex gap-4 text-sm text-tinta-2">
+            {(['Estadual', 'Municipal'] as const).map((esfera) => (
+              <li key={esfera} className="flex items-center gap-2">
+                <span
+                  aria-hidden
+                  className="size-2.5 rounded-full"
+                  style={{ background: COR[esfera] }}
+                />
+                {esfera}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   )
 }

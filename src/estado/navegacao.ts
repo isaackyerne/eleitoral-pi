@@ -6,6 +6,7 @@ export const SECOES = [
   { id: 'mapa', rotulo: 'Mapa' },
   { id: 'participacao', rotulo: 'Participação' },
   { id: 'partidos', rotulo: 'Partidos' },
+  { id: 'cruzamento', rotulo: 'Cruzamento' },
 ] as const
 
 export type SecaoId = (typeof SECOES)[number]['id']

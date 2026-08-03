@@ -1,5 +1,7 @@
 import type { VotavelTop } from '../dados/consultas'
+import { useColapso } from '../estado/colapso'
 import { useTema } from '../estado/tema'
+import { BotaoColapsar } from '../ui/BotaoColapsar'
 import { Nota } from '../ui/Nota'
 import { OUTROS, SLOTS, formataInteiro, formataPct } from '../viz/paleta'
 
@@ -21,6 +23,8 @@ export function TopVotaveis({
   carregando: boolean
 }) {
   const modo = useTema()
+  const colapsado = useColapso((s) => s.colapsados['top-votaveis'] ?? false)
+  const alternar = useColapso((s) => s.alternar)
   const maior = dados[0]?.VOTOS ?? 0
   const total = dados.reduce((s, d) => s + d.VOTOS, 0)
 
@@ -39,46 +43,52 @@ export function TopVotaveis({
           anos fiquem comparáveis, esses votos são divididos pelo número de
           vagas.
         </Nota>
+        <BotaoColapsar aberto={!colapsado} aoAlternar={() => alternar('top-votaveis')} rotulo="Mais votados" />
       </div>
-      <p className="mt-1 text-sm text-tinta-2">
-        A barra mostra o tamanho de cada um em relação ao primeiro colocado.
-        Branco e nulo aparecem na lista para dar a proporção.
-      </p>
 
-      {carregando ? (
-        <p className="mt-5 text-sm text-tinta-3">Carregando…</p>
-      ) : !dados.length ? (
-        <p className="mt-5 text-sm text-tinta-3">Nenhum voto com esses filtros.</p>
-      ) : (
-        <ol className="mt-5 space-y-2.5">
-          {dados.map((d) => (
-            <li key={d.SK_VOTAVEL}>
-              <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate text-tinta">
-                  {d.NM_URNA ?? d.NM_VOTAVEL}
-                  {d.SG_PARTIDO && (
-                    <span className="ml-1.5 text-tinta-3">{d.SG_PARTIDO}</span>
-                  )}
-                </span>
-                <span className="tabular shrink-0 text-tinta-2">
-                  {formataInteiro(d.VOTOS)}
-                  <span className="ml-1.5 text-tinta-3">
-                    {formataPct(total ? (d.VOTOS / total) * 100 : 0)}
-                  </span>
-                </span>
-              </div>
-              <div className="mt-1 h-2 overflow-hidden rounded-full bg-tinta/[0.06]">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${maior ? (d.VOTOS / maior) * 100 : 0}%`,
-                    background: cor(d),
-                  }}
-                />
-              </div>
-            </li>
-          ))}
-        </ol>
+      {!colapsado && (
+        <>
+          <p className="mt-1 text-sm text-tinta-2">
+            A barra mostra o tamanho de cada um em relação ao primeiro colocado.
+            Branco e nulo aparecem na lista para dar a proporção.
+          </p>
+
+          {carregando ? (
+            <p className="mt-5 text-sm text-tinta-3">Carregando…</p>
+          ) : !dados.length ? (
+            <p className="mt-5 text-sm text-tinta-3">Nenhum voto com esses filtros.</p>
+          ) : (
+            <ol className="mt-5 space-y-2.5">
+              {dados.map((d) => (
+                <li key={d.SK_VOTAVEL}>
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="min-w-0 truncate text-tinta">
+                      {d.NM_URNA ?? d.NM_VOTAVEL}
+                      {d.SG_PARTIDO && (
+                        <span className="ml-1.5 text-tinta-3">{d.SG_PARTIDO}</span>
+                      )}
+                    </span>
+                    <span className="tabular shrink-0 text-tinta-2">
+                      {formataInteiro(d.VOTOS)}
+                      <span className="ml-1.5 text-tinta-3">
+                        {formataPct(total ? (d.VOTOS / total) * 100 : 0)}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-tinta/[0.06]">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${maior ? (d.VOTOS / maior) * 100 : 0}%`,
+                        background: cor(d),
+                      }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </>
       )}
     </section>
   )

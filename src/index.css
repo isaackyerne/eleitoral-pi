@@ -67,3 +67,25 @@ body {
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* Tooltip do Leaflet (mapa) no tema do painel — o padrão do Leaflet é um
+   balão branco fixo, que destoa no escuro. */
+.leaflet-tooltip.mapa-tooltip,
+.leaflet-tooltip {
+  background: var(--pi-superficie);
+  color: var(--pi-tinta);
+  border: 1px solid var(--pi-borda);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+  font-size: 0.8125rem;
+  padding: 0.5rem 0.625rem;
+}
+.leaflet-tooltip-top:before,
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+  border-top-color: var(--pi-superficie);
+}
+.leaflet-container {
+  font-family: inherit;
+}

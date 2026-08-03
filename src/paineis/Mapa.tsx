@@ -1,36 +1,36 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip } from 'react-leaflet'
+import type { Layer } from 'leaflet'
+import type { Feature, FeatureCollection } from 'geojson'
 import type { LocalMapa, MunicipioMapa } from '../dados/consultas'
+import { useColapso } from '../estado/colapso'
 import { useFiltros } from '../estado/filtros'
+import { BotaoColapsar } from '../ui/BotaoColapsar'
 import { Nota } from '../ui/Nota'
-import { useTema } from '../estado/tema'
 import { OUTROS, SLOTS, TINTA, formataInteiro, formataPct } from '../viz/paleta'
-import { caixaDe, corSequencial, projeta, RAMPA_PASSOS } from '../viz/projecao'
+import { corSequencial, RAMPA_PASSOS } from '../viz/projecao'
+import { ATRIBUICAO_CARTO, CENTRO_PI, urlTilesCarto, ZOOM_PI } from '../viz/mapabase'
 
 /**
- * Mapa do Piauí em SVG.
+ * Mapa do Piauí sobre tiles reais (CARTO Positron, atribuição OpenStreetMap).
  *
- * Duas camadas alternáveis, como na referência: municípios (coroplético) e
- * locais de votação (pontos). Sem tiles — a geometria do IBGE é desenhada
- * direto, o que deixa o mapa herdar as cores do tema em vez de ficar um
- * retângulo claro dentro de um painel escuro.
+ * Sempre claro, mesmo com o resto do painel no tema escuro — os tiles CARTO
+ * escuros deixavam o coroplético colorido difícil de ler em cima, e a paleta
+ * categórica só foi validada para contraste contra as duas superfícies do
+ * app, não contra um tile de satélite/rua.
  *
- * Duas leituras do coroplético:
- *  - **partido**: categórico, com a cor fixa do partido vencedor;
- *  - **comparecimento**: sequencial, uma cor variando em luminosidade.
+ * Duas camadas alternáveis: municípios (coroplético) e locais de votação
+ * (pontos). Duas leituras do coroplético: **partido** (cor fixa do vencedor)
+ * e **comparecimento** (sequencial).
  */
 
-type Geo = {
-  features: {
-    properties: { ibge: number }
-    geometry: { type: 'Polygon' | 'MultiPolygon'; coordinates: never }
-  }[]
-}
+// Fixo em claro — ver nota acima. Não segue `useTema()` de propósito.
+const MODO_MAPA = 'claro'
 
 type Camada = 'municipios' | 'locais'
 type Pintura = 'partido' | 'comparecimento'
 
-const L = 560
-const A = 640
+const ALTURA = 640
 
 export function Mapa({
   municipios, locais, slots, carregando,
@@ -40,16 +40,15 @@ export function Mapa({
   slots: Map<number, number>
   carregando: boolean
 }) {
-  const modo = useTema()
-  const t = TINTA[modo]
+  const t = TINTA[MODO_MAPA]
   const definirFiltro = useFiltros((s) => s.definir)
   const definirRotulo = useFiltros((s) => s.definirRotulo)
+  const colapsado = useColapso((s) => s.colapsados.mapa ?? false)
+  const alternar = useColapso((s) => s.alternar)
 
-  const [geo, setGeo] = useState<Geo | null>(null)
+  const [geo, setGeo] = useState<FeatureCollection | null>(null)
   const [camada, setCamada] = useState<Camada>('municipios')
   const [pintura, setPintura] = useState<Pintura>('partido')
-  const [sobre, setSobre] = useState<{ x: number; y: number; html: React.ReactNode } | null>(null)
-  const svg = useRef<SVGSVGElement>(null)
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}dados/municipios_pi.geojson`)
@@ -57,11 +56,6 @@ export function Mapa({
       .then(setGeo)
       .catch(() => setGeo(null))
   }, [])
-
-  const proj = useMemo(
-    () => (geo ? projeta(caixaDe(geo.features), L, A) : null),
-    [geo],
-  )
 
   const porIbge = useMemo(() => {
     const m = new Map<number, MunicipioMapa>()
@@ -75,14 +69,14 @@ export function Mapa({
   }, [municipios])
 
   function cor(d: MunicipioMapa | undefined): string {
-    if (!d) return modo === 'claro' ? '#eeede8' : '#242422'
+    if (!d) return '#eeede8'
     if (pintura === 'comparecimento') {
       return d.PCT_COMPARECIMENTO === null
         ? OUTROS
         : corSequencial(d.PCT_COMPARECIMENTO, faixa.min, faixa.max)
     }
     const i = d.SK_PARTIDO_VENCEDOR === null ? undefined : slots.get(d.SK_PARTIDO_VENCEDOR)
-    return i === undefined ? OUTROS : SLOTS[modo][i]
+    return i === undefined ? OUTROS : SLOTS[MODO_MAPA][i]
   }
 
   // Legenda do modo partido: só os que de fato vencem algum município.
@@ -97,10 +91,41 @@ export function Mapa({
     return [...conta.entries()].sort((a, b) => b[1].n - a[1].n)
   }, [municipios])
 
-  function posiciona(e: React.MouseEvent, html: React.ReactNode) {
-    const r = svg.current?.getBoundingClientRect()
-    if (!r) return
-    setSobre({ x: e.clientX - r.left, y: e.clientY - r.top, html })
+  function tooltipMunicipio(d: MunicipioMapa): string {
+    const linhas = [`<div style="font-weight:600">${d.NM_MUNICIPIO}</div>`]
+    if (d.NM_VENCEDOR) {
+      linhas.push(
+        `<div>${d.NM_VENCEDOR}${d.SG_PARTIDO_VENCEDOR ? ` (${d.SG_PARTIDO_VENCEDOR})` : ''}` +
+        `${d.PCT_VENCEDOR !== null ? ` · ${formataPct(d.PCT_VENCEDOR)}` : ''}</div>`,
+      )
+    }
+    linhas.push(`<div class="tabular">${formataInteiro(d.VOTOS)} votos</div>`)
+    if (d.PCT_COMPARECIMENTO !== null) {
+      linhas.push(`<div class="tabular">${formataPct(d.PCT_COMPARECIMENTO)} de comparecimento</div>`)
+    }
+    return linhas.join('')
+  }
+
+  function aoCadaMunicipio(feature: Feature, layer: Layer) {
+    const ibge = Number((feature.properties as { ibge: number } | null)?.ibge)
+    const d = porIbge.get(ibge)
+    if (!d) return
+    layer.bindTooltip(tooltipMunicipio(d), { sticky: true, className: 'mapa-tooltip' })
+    layer.on('click', () => {
+      definirFiltro('cdMunicipio', d.CD_MUNICIPIO)
+      definirRotulo('cdMunicipio', d.NM_MUNICIPIO)
+    })
+  }
+
+  function estiloMunicipio(feature?: Feature) {
+    const ibge = Number((feature?.properties as { ibge: number } | null)?.ibge)
+    const d = porIbge.get(ibge)
+    return {
+      color: t.superficie,
+      weight: 0.6,
+      fillColor: cor(d),
+      fillOpacity: camada === 'municipios' ? 0.85 : 0,
+    }
   }
 
   return (
@@ -144,94 +169,47 @@ export function Mapa({
             )}
           </div>
         )}
+
+        <BotaoColapsar aberto={!colapsado} aoAlternar={() => alternar('mapa')} rotulo="Mapa eleitoral" />
       </div>
 
+      {!colapsado && (
       <div className="relative grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_200px]">
-        <div className="relative">
+        <div className="relative overflow-hidden rounded-lg" style={{ height: ALTURA }}>
           {!geo || carregando ? (
-            <p className="py-20 text-center text-sm text-tinta-3">Carregando o mapa…</p>
-          ) : (
-            <svg ref={svg} viewBox={`0 0 ${L} ${A}`} className="h-auto w-full"
-              role="img" aria-label="Mapa do Piauí por município">
-              <g onMouseLeave={() => setSobre(null)}>
-                {geo.features.map((f) => {
-                  const d = porIbge.get(f.properties.ibge)
-                  return (
-                    <path
-                      key={f.properties.ibge}
-                      d={proj!.caminho(f.geometry.coordinates, f.geometry.type)}
-                      fill={camada === 'municipios' ? cor(d) : 'transparent'}
-                      stroke={t.superficie}
-                      strokeWidth={0.5}
-                      className={d ? 'cursor-pointer' : ''}
-                      onMouseMove={(e) =>
-                        d && posiciona(e, (
-                          <>
-                            <div className="font-medium text-tinta">{d.NM_MUNICIPIO}</div>
-                            <dl className="mt-1 space-y-0.5 text-tinta-2">
-                              {d.NM_VENCEDOR && (
-                                <div>
-                                  {d.NM_VENCEDOR}
-                                  {d.SG_PARTIDO_VENCEDOR && ` (${d.SG_PARTIDO_VENCEDOR})`}
-                                  {d.PCT_VENCEDOR !== null && ` · ${formataPct(d.PCT_VENCEDOR)}`}
-                                </div>
-                              )}
-                              <div className="tabular">{formataInteiro(d.VOTOS)} votos</div>
-                              {d.PCT_COMPARECIMENTO !== null && (
-                                <div className="tabular">
-                                  {formataPct(d.PCT_COMPARECIMENTO)} de comparecimento
-                                </div>
-                              )}
-                            </dl>
-                          </>
-                        ))
-                      }
-                      onClick={() => {
-                        if (!d) return
-                        definirFiltro('cdMunicipio', d.CD_MUNICIPIO)
-                        definirRotulo('cdMunicipio', d.NM_MUNICIPIO)
-                      }}
-                    />
-                  )
-                })}
-
-                {camada === 'locais' &&
-                  locais.map((p) => {
-                    const [x, y] = proj!.ponto(p.LON, p.LAT)
-                    return (
-                      <circle
-                        key={p.SK_LOCAL} cx={x} cy={y} r={2.2}
-                        fill={t.realce} fillOpacity={0.55}
-                        onMouseMove={(e) =>
-                          posiciona(e, (
-                            <>
-                              <div className="font-medium text-tinta">{p.NM_LOCAL}</div>
-                              <div className="text-tinta-2">{p.NM_MUNICIPIO}</div>
-                              <div className="tabular mt-1 text-tinta-2">
-                                {formataInteiro(p.VOTOS)} votos
-                                {p.PCT_COMPARECIMENTO !== null &&
-                                  ` · ${formataPct(p.PCT_COMPARECIMENTO)}`}
-                              </div>
-                            </>
-                          ))
-                        }
-                      />
-                    )
-                  })}
-              </g>
-            </svg>
-          )}
-
-          {sobre && (
-            <div
-              className="pointer-events-none absolute z-10 max-w-64 rounded-lg border borda bg-superficie px-3 py-2 text-sm shadow-lg"
-              style={{
-                left: Math.min(sobre.x + 12, L - 180),
-                top: sobre.y + 12,
-              }}
-            >
-              {sobre.html}
+            <div className="grid h-full place-items-center">
+              <p className="text-sm text-tinta-3">Carregando o mapa…</p>
             </div>
+          ) : (
+            <MapContainer
+              center={CENTRO_PI} zoom={ZOOM_PI} minZoom={5} maxZoom={16}
+              style={{ height: '100%', width: '100%', background: t.plano }}
+              aria-label="Mapa do Piauí por município"
+            >
+              <TileLayer url={urlTilesCarto(MODO_MAPA)} attribution={ATRIBUICAO_CARTO} />
+              <GeoJSON
+                key={`mun-${camada}-${pintura}-${municipios.length}`}
+                data={geo}
+                style={estiloMunicipio}
+                onEachFeature={aoCadaMunicipio}
+              />
+              {camada === 'locais' &&
+                locais.map((p) => (
+                  <CircleMarker
+                    key={p.SK_LOCAL} center={[p.LAT, p.LON]} radius={3}
+                    pathOptions={{ color: t.realce, weight: 0, fillOpacity: 0.55 }}
+                  >
+                    <Tooltip sticky>
+                      <div className="font-medium">{p.NM_LOCAL}</div>
+                      <div>{p.NM_MUNICIPIO}</div>
+                      <div className="tabular mt-1">
+                        {formataInteiro(p.VOTOS)} votos
+                        {p.PCT_COMPARECIMENTO !== null && ` · ${formataPct(p.PCT_COMPARECIMENTO)}`}
+                      </div>
+                    </Tooltip>
+                  </CircleMarker>
+                ))}
+            </MapContainer>
           )}
         </div>
 
@@ -254,7 +232,7 @@ export function Mapa({
                 {vencedores.map(([sk, v]) => (
                   <li key={sk} className="flex items-center gap-2">
                     <span aria-hidden className="size-3 shrink-0 rounded"
-                      style={{ background: slots.has(sk) ? SLOTS[modo][slots.get(sk)!] : OUTROS }} />
+                      style={{ background: slots.has(sk) ? SLOTS[MODO_MAPA][slots.get(sk)!] : OUTROS }} />
                     <span className="min-w-0 flex-1 truncate text-tinta">{v.sg}</span>
                     <span className="tabular text-tinta-2">{v.n}</span>
                   </li>
@@ -286,6 +264,7 @@ export function Mapa({
           </p>
         </div>
       </div>
+      )}
     </section>
   )
 }

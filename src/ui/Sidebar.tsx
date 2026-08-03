@@ -30,6 +30,9 @@ const ICONES: Record<SecaoId, ReactNode> = {
     <><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M3 20h18" /></>
   ),
   partidos: <><path d="M4 6h10" /><path d="M4 12h16" /><path d="M4 18h6" /></>,
+  cruzamento: (
+    <><path d="M4 6l7 7-7 7" /><path d="M20 6l-7 7 7 7" /></>
+  ),
 }
 
 function Icone({ id }: { id: SecaoId }) {
@@ -46,6 +49,7 @@ const ROTULO_FILTRO: Record<string, string> = {
   cdCargo: 'Cargo',
   cdMunicipio: 'Município',
   skPartido: 'Partido',
+  skVotavel: 'Candidato',
 }
 
 export function Sidebar() {

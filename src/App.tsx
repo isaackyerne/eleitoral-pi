@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  kpis, mapaLocais, mapaMunicipios, opcoes, participacao, tabela, topVotaveis,
-  votosPorPartidoAno, type LocalMapa, type MunicipioMapa,
-  type Granularidade, type Kpis as DadosKpis, type LinhaTabela,
-  type OpcaoCargo, type OpcaoEleicao, type OpcaoMunicipio, type OpcaoPartido,
+  conferenciaMunicipio, kpis, mapaLocais, mapaMunicipios, opcoes, participacao, tabela,
+  topVotaveis, votosPorPartidoAno, type LocalMapa, type MunicipioMapa,
+  type Granularidade, type Kpis as DadosKpis, type LinhaConferencia, type LinhaTabela,
+  type OpcaoCargo, type OpcaoEleicao, type OpcaoMunicipio, type OpcaoPartido, type OpcaoTurno,
   type Participacao as DadoParticipacao, type VotavelTop, type VotoPartido,
 } from './dados/consultas'
 import { useFiltros, type Filtros as TipoFiltros } from './estado/filtros'
 import { SECOES, useNavegacao } from './estado/navegacao'
 import { useTema } from './estado/tema'
+import { Conferencia } from './paineis/Conferencia'
+import { Cruzamento } from './paineis/Cruzamento'
 import { Filtros } from './paineis/Filtros'
 import { Kpis } from './paineis/Kpis'
 import { Mapa } from './paineis/Mapa'
 import { Participacao } from './paineis/Participacao'
 import { RankingPartidos } from './paineis/RankingPartidos'
+import { RankingZonas } from './paineis/RankingZonas'
 import { Tabela } from './paineis/Tabela'
 import { TopVotaveis } from './paineis/TopVotaveis'
 import { BotaoMenu, Sidebar } from './ui/Sidebar'
@@ -21,7 +24,7 @@ import { mapaDeSlots } from './viz/paleta'
 
 type Listas = {
   eleicoes: OpcaoEleicao[]; cargos: OpcaoCargo[]
-  municipios: OpcaoMunicipio[]; partidos: OpcaoPartido[]
+  municipios: OpcaoMunicipio[]; partidos: OpcaoPartido[]; turnos: OpcaoTurno[]
 }
 
 export default function App() {
@@ -29,8 +32,9 @@ export default function App() {
   const secao = useNavegacao((s) => s.secao)
   const filtros = useFiltros()
   const recorte: TipoFiltros = {
-    skEleicao: filtros.skEleicao, cdCargo: filtros.cdCargo,
-    cdMunicipio: filtros.cdMunicipio, skPartido: filtros.skPartido,
+    skEleicao: filtros.skEleicao, skEleicaoBase: filtros.skEleicaoBase, cdCargo: filtros.cdCargo,
+    cdMunicipio: filtros.cdMunicipio, skPartido: filtros.skPartido, skVotavel: filtros.skVotavel,
+    incluirBrancosNulos: filtros.incluirBrancosNulos,
   }
   const chave = JSON.stringify(recorte)
 
@@ -49,8 +53,10 @@ export default function App() {
     top: VotavelTop[]
     partidos: VotoPartido[]
     linhas: LinhaTabela[]
+    zonas: LinhaTabela[]
     municipios: MunicipioMapa[]
     locais: LocalMapa[]
+    conferencia: LinhaConferencia[]
   }
   const [carga, setCarga] = useState<Carga | null>(null)
   const pedido = `${chave}|${grao}`
@@ -58,8 +64,8 @@ export default function App() {
 
   useEffect(() => {
     opcoes()
-      .then(([eleicoes, cargos, municipios, partidos]) =>
-        setListas({ eleicoes, cargos, municipios, partidos }),
+      .then(([eleicoes, cargos, municipios, partidos, turnos]) =>
+        setListas({ eleicoes, cargos, municipios, partidos, turnos }),
       )
       .catch((e: unknown) => setErro(e instanceof Error ? e.message : String(e)))
   }, [])
@@ -68,14 +74,14 @@ export default function App() {
     let vivo = true
     Promise.all([
       kpis(recorte), participacao(recorte), topVotaveis(recorte),
-      votosPorPartidoAno(recorte), tabela(recorte, grao),
-      mapaMunicipios(recorte), mapaLocais(recorte),
+      votosPorPartidoAno(recorte), tabela(recorte, grao), tabela(recorte, 'zona'),
+      mapaMunicipios(recorte), mapaLocais(recorte), conferenciaMunicipio(recorte),
     ])
-      .then(([k, p, t, pa, tb, mu, lo]) => {
+      .then(([k, p, t, pa, tb, zn, mu, lo, cf]) => {
         if (!vivo) return
         setCarga({
           de: pedido, kpis: k[0] ?? null, participacao: p, top: t,
-          partidos: pa, linhas: tb, municipios: mu, locais: lo,
+          partidos: pa, linhas: tb, zonas: zn, municipios: mu, locais: lo, conferencia: cf,
         })
       })
       .catch((e: unknown) => {
@@ -91,8 +97,10 @@ export default function App() {
   const dadosTop = carga?.top ?? VAZIO
   const dadosPartidos = carga?.partidos ?? VAZIO
   const linhas = carga?.linhas ?? VAZIO
+  const zonas = carga?.zonas ?? VAZIO
   const municipios = carga?.municipios ?? VAZIO
   const locaisMapa = carga?.locais ?? VAZIO
+  const conferencia = carga?.conferencia ?? VAZIO
 
   // Slot de cor por partido, do total da série inteira — é o que faz a cor
   // seguir o partido em vez da posição no ranking de cada recorte.
@@ -153,6 +161,7 @@ export default function App() {
             <Filtros
               eleicoes={listas.eleicoes} cargos={listas.cargos}
               municipios={listas.municipios} partidos={listas.partidos}
+              turnos={listas.turnos}
             />
           )}
 
@@ -166,10 +175,13 @@ export default function App() {
           )}
 
           {mostra('mapa') && (
-            <Mapa
-              municipios={municipios} locais={locaisMapa}
-              slots={slots} carregando={carregando}
-            />
+            <>
+              <Mapa
+                municipios={municipios} locais={locaisMapa}
+                slots={slots} carregando={carregando}
+              />
+              <RankingZonas dados={zonas} carregando={carregando} />
+            </>
           )}
 
           {mostra('participacao') && secao !== 'visao' && <Participacao dados={dadosPart} />}
@@ -181,13 +193,24 @@ export default function App() {
             />
           )}
 
+          {secao === 'cruzamento' && listas && (
+            <Cruzamento
+              eleicoes={listas.eleicoes} cargos={listas.cargos} cdMunicipio={filtros.cdMunicipio}
+            />
+          )}
+
           <Tabela
             linhas={linhas} grao={grao} aoTrocarGrao={setGrao} carregando={carregando}
           />
 
+          <Conferencia dados={conferencia} carregando={carregando} />
+
           <footer className="pt-2 pb-6 text-sm text-tinta-3">
-            Fonte: dados abertos do Tribunal Superior Eleitoral. O painel considera
-            o 1º turno das eleições regulares; eleições suplementares ficam de fora.
+            <p>
+              Fonte: dados abertos do Tribunal Superior Eleitoral. O painel considera
+              o 1º turno das eleições regulares; eleições suplementares ficam de fora.
+            </p>
+            <p className="mt-1">Análise e elaboração: Isaac Kyerne — IKGeo</p>
           </footer>
         </div>
       </main>

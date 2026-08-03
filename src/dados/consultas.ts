@@ -1,4 +1,4 @@
-import { clausulas, type Filtros } from '../estado/filtros'
+import { clausulas, condEleicao, type Filtros } from '../estado/filtros'
 import { consulta } from './duckdb'
 
 /**
@@ -31,6 +31,8 @@ export type OpcaoEleicao = {
 export type OpcaoCargo = { CD_CARGO: number; DS_CARGO: string; TP_ESFERA: string }
 export type OpcaoMunicipio = { CD_MUNICIPIO: number; NM_MUNICIPIO: string }
 export type OpcaoPartido = { SK_PARTIDO: number; SG_PARTIDO: string; NM_PARTIDO: string }
+/** Turnos de cada eleição ordinária — inclui o 2º turno, que `OpcaoEleicao` omite de propósito. */
+export type OpcaoTurno = { SK_ELEICAO: number; ANO_ELEICAO: number; NR_TURNO: number }
 
 export function opcoes() {
   return Promise.all([
@@ -42,7 +44,31 @@ export function opcoes() {
       SELECT CD_MUNICIPIO, NM_MUNICIPIO FROM dim_municipio ORDER BY NM_MUNICIPIO`),
     consulta<OpcaoPartido>(`
       SELECT SK_PARTIDO, SG_PARTIDO, NM_PARTIDO FROM dim_partido ORDER BY SG_PARTIDO`),
+    consulta<OpcaoTurno>(`
+      SELECT SK_ELEICAO, ANO_ELEICAO, NR_TURNO FROM dim_eleicao
+      WHERE NOT FL_SUPLEMENTAR ORDER BY ANO_ELEICAO, NR_TURNO`),
   ])
+}
+
+/**
+ * Candidatos do recorte atual — opções do filtro global "Candidato".
+ * Ignora o próprio `skVotavel` (senão reabrir a busca só mostraria quem já
+ * está selecionado); os demais filtros (eleição, cargo, município, partido)
+ * valem normalmente, então a lista já nasce curta na maioria dos recortes.
+ */
+export function opcoesVotavel(f: Filtros) {
+  const cond = [condEleicao(f.skEleicao), "v.TP_VOTO = 'Nominal'"]
+  if (f.cdCargo !== null) cond.push(`f.CD_CARGO = ${f.cdCargo}`)
+  if (f.cdMunicipio !== null) cond.push(`l.CD_MUNICIPIO = ${f.cdMunicipio}`)
+  if (f.skPartido !== null) cond.push(`v.SK_PARTIDO = ${f.skPartido}`)
+  return consulta<OpcaoVotavel>(`
+    SELECT v.SK_VOTAVEL, v.NM_VOTAVEL, v.NM_URNA, p.SG_PARTIDO
+    ${FATO} LEFT JOIN dim_partido p USING (SK_PARTIDO)
+    WHERE ${cond.join(' AND ')}
+    GROUP BY 1, 2, 3, 4
+    ORDER BY SUM(f.QT_VOTOS_NORM) DESC
+    LIMIT 500
+  `)
 }
 
 // ─── KPIs ────────────────────────────────────────────────────────────────
@@ -70,8 +96,7 @@ export type Participacao = {
 }
 
 export function participacao(f: Filtros) {
-  const cond = ['e.FL_SERIE_PRINCIPAL']
-  if (f.skEleicao !== null) cond.push(`e.SK_ELEICAO = ${f.skEleicao}`)
+  const cond = [condEleicao(f.skEleicao)]
   if (f.cdMunicipio !== null) cond.push(`l.CD_MUNICIPIO = ${f.cdMunicipio}`)
   return consulta<Participacao>(`
     SELECT e.ANO_ELEICAO, e.TP_ESFERA,
@@ -160,8 +185,7 @@ const GRAO: Record<Granularidade, { chave: string; nome: string; detalhe: string
  */
 export function tabela(f: Filtros, grao: Granularidade) {
   const g = GRAO[grao]
-  const condEleitorado = ['e.FL_SERIE_PRINCIPAL']
-  if (f.skEleicao !== null) condEleitorado.push(`e.SK_ELEICAO = ${f.skEleicao}`)
+  const condEleitorado = [condEleicao(f.skEleicao)]
   if (f.cdMunicipio !== null) condEleitorado.push(`l.CD_MUNICIPIO = ${f.cdMunicipio}`)
 
   const chaveEleitorado = g.chave.replace(/\bf\./g, 'fl.')
@@ -192,6 +216,130 @@ export function tabela(f: Filtros, grao: Granularidade) {
   `)
 }
 
+// ─── conferência ─────────────────────────────────────────────────────────
+
+export type LinhaConferencia = {
+  CD_MUNICIPIO: number; NM_MUNICIPIO: string; SK_VOTAVEL: number
+  NR_VOTAVEL: string; NM_VOTAVEL: string; SG_PARTIDO: string | null
+  VOTOS: number; PCT_MUNICIPIO: number
+}
+
+/**
+ * Candidato × município, no grão que bate com a totalização oficial do TSE —
+ * pensada para conferir número contra o resultado publicado, não para leitura
+ * corrida. Por padrão só voto nominal entra (branco e nulo não têm
+ * candidatura pra conferir); `incluirBrancosNulos` é o único painel que
+ * respeita esse toggle hoje, de propósito — não faz sentido em Ranking de
+ * partidos nem no vencedor do mapa.
+ *
+ * Agrupa por `SK_VOTAVEL`, não por `NR_VOTAVEL` cru: sem filtro de cargo ou
+ * eleição, o mesmo número de urna se repete entre cargos e anos diferentes no
+ * mesmo município — `SK_VOTAVEL` é a candidatura de verdade.
+ */
+export function conferenciaMunicipio(f: Filtros) {
+  const soNominal = f.incluirBrancosNulos ? '' : "AND v.TP_VOTO = 'Nominal'"
+  return consulta<LinhaConferencia>(`
+    SELECT l.CD_MUNICIPIO, m.NM_MUNICIPIO, v.SK_VOTAVEL, v.NR_VOTAVEL, v.NM_VOTAVEL, p.SG_PARTIDO,
+           CAST(ROUND(SUM(f.QT_VOTOS_NORM)) AS BIGINT) AS VOTOS,
+           ROUND(100.0 * SUM(f.QT_VOTOS_NORM)
+                 / SUM(SUM(f.QT_VOTOS_NORM)) OVER (PARTITION BY l.CD_MUNICIPIO), 2) AS PCT_MUNICIPIO
+    ${FATO} JOIN dim_municipio m ON m.CD_MUNICIPIO = l.CD_MUNICIPIO
+      LEFT JOIN dim_partido p USING (SK_PARTIDO)
+    WHERE ${clausulas(f)} ${soNominal}
+    GROUP BY 1, 2, 3, 4, 5, 6
+    ORDER BY m.NM_MUNICIPIO, VOTOS DESC
+  `)
+}
+
+// ─── cruzamento ──────────────────────────────────────────────────────────
+
+export type OpcaoVotavel = {
+  SK_VOTAVEL: number; NM_VOTAVEL: string; NM_URNA: string | null; SG_PARTIDO: string | null
+}
+
+/**
+ * Candidatos nominais de um cargo numa eleição, ordenados por voto — é a
+ * lista de busca do seletor de candidato no Cruzamento.
+ *
+ * De propósito, **não** escopa pelo filtro global de município: o Cruzamento
+ * já ignora eleição e cargo da barra lateral (é o ponto dele — comparar
+ * qualquer combinação), então filtrar a busca por município escondia
+ * candidatos de cargo municipal de outras cidades sem avisar por quê, e
+ * parecia a lista travada. O recorte de município continua valendo no
+ * resultado do cruzamento (mapa e tabela), só não na busca.
+ */
+export function candidatosDoCargo(skEleicao: number, cdCargo: number) {
+  return consulta<OpcaoVotavel>(`
+    SELECT v.SK_VOTAVEL, v.NM_VOTAVEL, v.NM_URNA, p.SG_PARTIDO
+    FROM dim_votavel v
+    LEFT JOIN dim_partido p USING (SK_PARTIDO)
+    LEFT JOIN fato_votos f USING (SK_VOTAVEL)
+    WHERE v.SK_ELEICAO = ${skEleicao} AND v.CD_CARGO = ${cdCargo} AND v.TP_VOTO = 'Nominal'
+    GROUP BY 1, 2, 3, 4
+    ORDER BY COALESCE(SUM(f.QT_VOTOS_NORM), 0) DESC
+    LIMIT 500
+  `)
+}
+
+export type CandidatoCruzamento = {
+  slot: 'A' | 'B' | 'C' | 'D'
+  skEleicao: number; cdCargo: number; skVotavel: number
+  nome: string; anoEleicao: number; dsCargo: string
+}
+
+export type LinhaCruzamento = {
+  SK_LOCAL: number; NM_LOCAL: string; NM_MUNICIPIO: string
+  LAT: number | null; LON: number | null; VOTOS: number[]
+}
+
+/**
+ * Território de 1 a 4 candidatos, casado por `SK_LOCAL` — não por
+ * (município, zona, seção) como faria uma junção ingênua. `SK_LOCAL` já
+ * resolve zona renumerada e local que muda de nome entre anos, então
+ * comparar 2018 com 2024 aqui é mais seguro que a chave bruta do TSE.
+ *
+ * Aproximação ecológica: mede coincidência territorial de votação, não o
+ * eleitor individual, e a razão entre dois candidatos pode passar de 100%.
+ */
+export async function cruzamento(
+  candidatos: CandidatoCruzamento[], cdMunicipio: number | null,
+): Promise<LinhaCruzamento[]> {
+  const n = candidatos.length
+  if (!n) return []
+
+  const partes = candidatos.map((c, i) => `
+    SELECT ${i} AS idx, SK_LOCAL, SUM(QT_VOTOS_NORM) AS votos
+    FROM fato_votos
+    WHERE SK_ELEICAO = ${c.skEleicao} AND CD_CARGO = ${c.cdCargo} AND SK_VOTAVEL = ${c.skVotavel}
+    GROUP BY SK_LOCAL`).join(' UNION ALL ')
+  const colunas = candidatos
+    .map((_, i) => `COALESCE(SUM(votos) FILTER (WHERE idx = ${i}), 0) AS V${i}`).join(', ')
+  const selecionaV = candidatos.map((_, i) => `s.V${i}`).join(', ')
+  const condMun = cdMunicipio !== null ? `AND la.CD_MUNICIPIO = ${cdMunicipio}` : ''
+
+  type LinhaBruta = {
+    SK_LOCAL: number; NM_LOCAL: string; NM_MUNICIPIO: string
+    LAT: number | null; LON: number | null
+  } & { [coluna: `V${number}`]: number }
+
+  const linhas = await consulta<LinhaBruta>(`
+    WITH u AS (${partes}),
+    s AS (SELECT SK_LOCAL, ${colunas} FROM u GROUP BY SK_LOCAL)
+    SELECT s.SK_LOCAL AS SK_LOCAL, la.NM_LOCAL_REF AS NM_LOCAL, m.NM_MUNICIPIO AS NM_MUNICIPIO,
+           la.LATITUDE_REF AS LAT, la.LONGITUDE_REF AS LON, ${selecionaV}
+    FROM s
+    JOIN dim_local_atual la USING (SK_LOCAL)
+    JOIN dim_municipio m ON m.CD_MUNICIPIO = la.CD_MUNICIPIO
+    WHERE 1=1 ${condMun}
+  `)
+
+  return linhas.map((l) => ({
+    SK_LOCAL: l.SK_LOCAL, NM_LOCAL: l.NM_LOCAL, NM_MUNICIPIO: l.NM_MUNICIPIO,
+    LAT: l.LAT, LON: l.LON,
+    VOTOS: candidatos.map((_, i) => l[`V${i}`] ?? 0),
+  }))
+}
+
 // ─── mapa ────────────────────────────────────────────────────────────────
 
 export type MunicipioMapa = {
@@ -209,8 +357,7 @@ export type MunicipioMapa = {
  * tem candidato, e branco/nulo não disputam.
  */
 export function mapaMunicipios(f: Filtros) {
-  const condEleitorado = ['e.FL_SERIE_PRINCIPAL']
-  if (f.skEleicao !== null) condEleitorado.push(`e.SK_ELEICAO = ${f.skEleicao}`)
+  const condEleitorado = [condEleicao(f.skEleicao)]
 
   return consulta<MunicipioMapa>(`
     WITH base AS (
@@ -259,8 +406,7 @@ export type LocalMapa = {
 
 /** Locais de votação com coordenada — 97,4% do total têm. */
 export function mapaLocais(f: Filtros) {
-  const condEleitorado = ['e.FL_SERIE_PRINCIPAL']
-  if (f.skEleicao !== null) condEleitorado.push(`e.SK_ELEICAO = ${f.skEleicao}`)
+  const condEleitorado = [condEleicao(f.skEleicao)]
   if (f.cdMunicipio !== null) condEleitorado.push(`l.CD_MUNICIPIO = ${f.cdMunicipio}`)
 
   return consulta<LocalMapa>(`
