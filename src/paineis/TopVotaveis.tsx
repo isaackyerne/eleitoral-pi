@@ -3,7 +3,7 @@ import { useColapso } from '../estado/colapso'
 import { useTema } from '../estado/tema'
 import { BotaoColapsar } from '../ui/BotaoColapsar'
 import { Nota } from '../ui/Nota'
-import { OUTROS, SLOTS, formataInteiro, formataPct } from '../viz/paleta'
+import { OUTROS, corDoSlot, formataInteiro, formataPct } from '../viz/paleta'
 
 /**
  * Mais votados do recorte.
@@ -31,7 +31,7 @@ export function TopVotaveis({
   function cor(d: VotavelTop): string {
     if (d.TP_VOTO !== 'Nominal' && d.TP_VOTO !== 'Legenda') return OUTROS
     const i = d.SK_PARTIDO === null ? undefined : slots.get(d.SK_PARTIDO)
-    return i === undefined ? OUTROS : SLOTS[modo][i]
+    return i === undefined ? OUTROS : corDoSlot(i, modo)
   }
 
   return (

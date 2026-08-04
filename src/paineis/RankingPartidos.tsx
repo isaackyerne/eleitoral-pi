@@ -8,7 +8,7 @@ import { useColapso } from '../estado/colapso'
 import { useTema } from '../estado/tema'
 import { BotaoColapsar } from '../ui/BotaoColapsar'
 import { Nota } from '../ui/Nota'
-import { SLOTS, OUTROS, TINTA, formataInteiro } from '../viz/paleta'
+import { OUTROS, TINTA, corDoSlot, formataInteiro } from '../viz/paleta'
 
 /**
  * Ranking de partidos num ano.
@@ -124,7 +124,7 @@ export function RankingPartidos({ dados, ano, anos, aoTrocarAno, slots }: Props)
               />
               <Bar dataKey="VOTOS" radius={[0, 4, 4, 0]} barSize={18}>
                 {linhas.map((d) => (
-                  <Cell key={d.SK_PARTIDO} fill={slots.has(d.SK_PARTIDO) ? SLOTS[modo][slots.get(d.SK_PARTIDO)!] : OUTROS} />
+                  <Cell key={d.SK_PARTIDO} fill={slots.has(d.SK_PARTIDO) ? corDoSlot(slots.get(d.SK_PARTIDO)!, modo) : OUTROS} />
                 ))}
                 {/* Rótulo direto em todas as barras: alívio de contraste. */}
                 <LabelList

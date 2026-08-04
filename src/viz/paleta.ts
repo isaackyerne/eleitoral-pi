@@ -59,16 +59,50 @@ export const TINTA: Record<Modo, {
  * no ranking**. Se um filtro tirar o PT do top 8, os demais não podem trocar de
  * cor. Por isso o mapa é montado do total da série inteira e nunca recalculado
  * por recorte — o índice do slot é do partido, e só o hex muda com o tema.
+ *
+ * PT e PP têm cor fixa (hex de marca, pedido explícito), igual nos dois temas
+ * — não fazem parte da paleta categórica validada para contraste/daltonismo,
+ * por isso ficam fora de `SLOTS` e são resolvidas à parte em `corDoSlot`. Como
+ * não consomem um índice da paleta, os demais partidos do top 8 usam os 8
+ * slots inteiros, na ordem do ranking.
  */
-export function mapaDeSlots(partidosPorVotoTotal: number[]): Map<number, number> {
+const SLOT_PT = -1
+const SLOT_PP = -2
+const CORES_FIXAS: Record<string, { slot: number; cor: string }> = {
+  PT: { slot: SLOT_PT, cor: '#E4142C' },
+  PP: { slot: SLOT_PP, cor: '#234F74' },
+}
+
+export function mapaDeSlots(
+  partidosPorVotoTotal: { sk: number; sigla: string }[],
+): Map<number, number> {
+  const top = partidosPorVotoTotal.slice(0, SLOTS.claro.length)
   const mapa = new Map<number, number>()
-  partidosPorVotoTotal.slice(0, SLOTS.claro.length).forEach((sk, i) => mapa.set(sk, i))
+
+  for (const { sk, sigla } of top) {
+    const fixo = CORES_FIXAS[sigla]
+    if (fixo !== undefined) mapa.set(sk, fixo.slot)
+  }
+
+  const livres = [...Array(SLOTS.claro.length).keys()]
+  for (const { sk } of top) {
+    if (mapa.has(sk)) continue
+    mapa.set(sk, livres.shift()!)
+  }
+
   return mapa
+}
+
+/** Resolve um índice de `mapaDeSlots` (paleta ou cor fixa) para o hex do tema. */
+export function corDoSlot(indice: number, modo: Modo): string {
+  if (indice === SLOT_PT) return CORES_FIXAS.PT.cor
+  if (indice === SLOT_PP) return CORES_FIXAS.PP.cor
+  return SLOTS[modo][indice]
 }
 
 export function corDoPartido(slots: Map<number, number>, sk: number, modo: Modo): string {
   const i = slots.get(sk)
-  return i === undefined ? OUTROS : SLOTS[modo][i]
+  return i === undefined ? OUTROS : corDoSlot(i, modo)
 }
 
 export function formataInteiro(n: number): string {

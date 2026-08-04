@@ -7,7 +7,7 @@ import { useColapso } from '../estado/colapso'
 import { useFiltros } from '../estado/filtros'
 import { BotaoColapsar } from '../ui/BotaoColapsar'
 import { Nota } from '../ui/Nota'
-import { OUTROS, SLOTS, TINTA, formataInteiro, formataPct } from '../viz/paleta'
+import { OUTROS, TINTA, corDoSlot, formataInteiro, formataPct } from '../viz/paleta'
 import { corSequencial, RAMPA_PASSOS } from '../viz/projecao'
 import { ATRIBUICAO_CARTO, CENTRO_PI, urlTilesCarto, ZOOM_PI } from '../viz/mapabase'
 
@@ -76,7 +76,7 @@ export function Mapa({
         : corSequencial(d.PCT_COMPARECIMENTO, faixa.min, faixa.max)
     }
     const i = d.SK_PARTIDO_VENCEDOR === null ? undefined : slots.get(d.SK_PARTIDO_VENCEDOR)
-    return i === undefined ? OUTROS : SLOTS[MODO_MAPA][i]
+    return i === undefined ? OUTROS : corDoSlot(i, MODO_MAPA)
   }
 
   // Legenda do modo partido: só os que de fato vencem algum município.
@@ -232,7 +232,7 @@ export function Mapa({
                 {vencedores.map(([sk, v]) => (
                   <li key={sk} className="flex items-center gap-2">
                     <span aria-hidden className="size-3 shrink-0 rounded"
-                      style={{ background: slots.has(sk) ? SLOTS[MODO_MAPA][slots.get(sk)!] : OUTROS }} />
+                      style={{ background: slots.has(sk) ? corDoSlot(slots.get(sk)!, MODO_MAPA) : OUTROS }} />
                     <span className="min-w-0 flex-1 truncate text-tinta">{v.sg}</span>
                     <span className="tabular text-tinta-2">{v.n}</span>
                   </li>

@@ -105,11 +105,16 @@ export default function App() {
   // Slot de cor por partido, do total da série inteira — é o que faz a cor
   // seguir o partido em vez da posição no ranking de cada recorte.
   const slots = useMemo(() => {
-    const total = new Map<number, number>()
+    const total = new Map<number, { votos: number; sigla: string }>()
     for (const d of dadosPartidos) {
-      total.set(d.SK_PARTIDO, (total.get(d.SK_PARTIDO) ?? 0) + d.VOTOS)
+      const atual = total.get(d.SK_PARTIDO)
+      total.set(d.SK_PARTIDO, { votos: (atual?.votos ?? 0) + d.VOTOS, sigla: d.SG_PARTIDO })
     }
-    return mapaDeSlots([...total.entries()].sort((a, b) => b[1] - a[1]).map(([sk]) => sk))
+    return mapaDeSlots(
+      [...total.entries()]
+        .sort((a, b) => b[1].votos - a[1].votos)
+        .map(([sk, v]) => ({ sk, sigla: v.sigla })),
+    )
   }, [dadosPartidos])
 
   const anos = useMemo(
