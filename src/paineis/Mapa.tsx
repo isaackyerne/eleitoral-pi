@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip } from 'react-leaflet'
 import type { Layer } from 'leaflet'
 import type { Feature, FeatureCollection } from 'geojson'
-import type { LocalMapa, MunicipioMapa } from '../dados/consultas'
+import type { DoisMaisVotados, LocalMapa, MunicipioMapa } from '../dados/consultas'
 import { useColapso } from '../estado/colapso'
 import { useFiltros } from '../estado/filtros'
 import { BotaoColapsar } from '../ui/BotaoColapsar'
@@ -33,14 +33,24 @@ type Pintura = 'partido' | 'comparecimento'
 const ALTURA = 640
 
 export function Mapa({
-  municipios, locais, slots, carregando,
+  municipios, locais, slots, carregando, doisGovernador,
 }: {
   municipios: MunicipioMapa[]
   locais: LocalMapa[]
   slots: Map<number, number>
   carregando: boolean
+  doisGovernador: DoisMaisVotados | null
 }) {
+  const doisCandidatos = (doisGovernador?.candidatos.length ?? 0) === 2 ? doisGovernador : null
   const t = TINTA[MODO_MAPA]
+
+  // Mesma cor do partido usada no resto do painel (RankingPartidos, coroplético
+  // por partido) — não uma rampa genérica. Se o partido do candidato não está
+  // nos 8 slots do recorte, cai em "Outros" cinza, igual ao coroplético.
+  function corCandidato(skPartido: number | null): string {
+    if (skPartido === null || !slots.has(skPartido)) return OUTROS
+    return corDoSlot(slots.get(skPartido)!, MODO_MAPA)
+  }
   const definirFiltro = useFiltros((s) => s.definir)
   const definirRotulo = useFiltros((s) => s.definirRotulo)
   const colapsado = useColapso((s) => s.colapsados.mapa ?? false)
@@ -193,7 +203,30 @@ export function Mapa({
                 style={estiloMunicipio}
                 onEachFeature={aoCadaMunicipio}
               />
-              {camada === 'locais' &&
+              {camada === 'locais' && doisCandidatos &&
+                doisCandidatos.locais.map((p) => {
+                  const [a, b] = doisCandidatos.candidatos
+                  const corVencedor =
+                    p.VOTOS_A === p.VOTOS_B ? OUTROS : corCandidato(p.VOTOS_A > p.VOTOS_B ? a.SK_PARTIDO : b.SK_PARTIDO)
+                  return (
+                    <CircleMarker
+                      key={p.SK_LOCAL} center={[p.LAT, p.LON]} radius={3}
+                      pathOptions={{ color: corVencedor, weight: 0, fillOpacity: 0.8 }}
+                    >
+                      <Tooltip sticky>
+                        <div className="font-medium">{p.NM_LOCAL}</div>
+                        <div>{p.NM_MUNICIPIO}</div>
+                        <div className="tabular mt-1" style={{ fontWeight: p.VOTOS_A >= p.VOTOS_B ? 600 : 400 }}>
+                          {doisCandidatos.candidatos[0].NOME}: {formataInteiro(p.VOTOS_A)}
+                        </div>
+                        <div className="tabular" style={{ fontWeight: p.VOTOS_B > p.VOTOS_A ? 600 : 400 }}>
+                          {doisCandidatos.candidatos[1].NOME}: {formataInteiro(p.VOTOS_B)}
+                        </div>
+                      </Tooltip>
+                    </CircleMarker>
+                  )
+                })}
+              {camada === 'locais' && !doisCandidatos &&
                 locais.map((p) => (
                   <CircleMarker
                     key={p.SK_LOCAL} center={[p.LAT, p.LON]} radius={3}
@@ -215,14 +248,38 @@ export function Mapa({
 
         <div className="min-w-0">
           {camada === 'locais' ? (
-            <p className="text-sm text-tinta-2">
-              Cada ponto é um local de votação — escola, posto, câmara.
-              <span className="mt-1 block text-tinta-3">
-                {formataInteiro(locais.length)} têm endereço geolocalizado. Os
-                poucos sem coordenada não aparecem aqui, mas seguem contados nos
-                totais.
-              </span>
-            </p>
+            doisCandidatos ? (
+              <>
+                <h3 className="text-xs font-medium tracking-wide text-tinta-3 uppercase">
+                  Os dois mais votados
+                </h3>
+                <ul className="mt-2 space-y-1.5 text-sm">
+                  {doisCandidatos.candidatos.map((c) => (
+                    <li key={c.SK_VOTAVEL} className="flex items-center gap-2">
+                      <span aria-hidden className="size-3 shrink-0 rounded-full"
+                        style={{ background: corCandidato(c.SK_PARTIDO) }} />
+                      <span className="min-w-0 flex-1 truncate text-tinta">
+                        {c.NOME}{c.SG_PARTIDO && ` · ${c.SG_PARTIDO}`}
+                      </span>
+                      <span className="tabular text-tinta-2">{formataInteiro(c.VOTOS)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-xs text-tinta-3">
+                  A cor do ponto é a do partido de quem venceu naquele local de
+                  votação.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-tinta-2">
+                Cada ponto é um local de votação — escola, posto, câmara.
+                <span className="mt-1 block text-tinta-3">
+                  {formataInteiro(locais.length)} têm endereço geolocalizado. Os
+                  poucos sem coordenada não aparecem aqui, mas seguem contados nos
+                  totais.
+                </span>
+              </p>
+            )
           ) : pintura === 'partido' ? (
             <>
               <h3 className="text-xs font-medium tracking-wide text-tinta-3 uppercase">

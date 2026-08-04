@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  conferenciaMunicipio, kpis, mapaLocais, mapaMunicipios, opcoes, participacao, tabela,
-  topVotaveis, votosPorPartidoAno, type LocalMapa, type MunicipioMapa,
+  conferenciaMunicipio, doisMaisVotadosPorLocal, kpis, mapaLocais, mapaMunicipios, opcoes,
+  participacao, tabela, topVotaveis, votosPorPartidoAno,
+  type DoisMaisVotados, type LocalMapa, type MunicipioMapa,
   type Granularidade, type Kpis as DadosKpis, type LinhaConferencia, type LinhaTabela,
   type OpcaoCargo, type OpcaoEleicao, type OpcaoMunicipio, type OpcaoPartido, type OpcaoTurno,
   type Participacao as DadoParticipacao, type VotavelTop, type VotoPartido,
@@ -57,10 +58,23 @@ export default function App() {
     municipios: MunicipioMapa[]
     locais: LocalMapa[]
     conferencia: LinhaConferencia[]
+    doisGovernador: DoisMaisVotados
   }
   const [carga, setCarga] = useState<Carga | null>(null)
   const pedido = `${chave}|${grao}`
   const carregando = carga?.de !== pedido
+
+  // Cargo é um código estável do TSE, mas resolvido pela descrição em vez de
+  // fixado no código — evita depender de um número que só existe por
+  // convenção externa ao painel.
+  const cargoGovernador = listas?.cargos.find((c) => c.DS_CARGO === 'Governador')?.CD_CARGO ?? null
+  const ehGovernador = cargoGovernador !== null && recorte.cdCargo === cargoGovernador
+
+  // Cargos proporcionais (e Vereador) têm disputa mais pulverizada — 8 nomes
+  // corta candidato relevante que 10 ainda pega.
+  const CARGOS_TOP_10 = ['Deputado Estadual', 'Deputado Federal', 'Vereador']
+  const cargoAtual = listas?.cargos.find((c) => c.CD_CARGO === recorte.cdCargo)?.DS_CARGO
+  const limiteTop = cargoAtual && CARGOS_TOP_10.includes(cargoAtual) ? 10 : 8
 
   useEffect(() => {
     opcoes()
@@ -73,15 +87,17 @@ export default function App() {
   useEffect(() => {
     let vivo = true
     Promise.all([
-      kpis(recorte), participacao(recorte), topVotaveis(recorte),
+      kpis(recorte), participacao(recorte), topVotaveis(recorte, limiteTop),
       votosPorPartidoAno(recorte), tabela(recorte, grao), tabela(recorte, 'zona'),
       mapaMunicipios(recorte), mapaLocais(recorte), conferenciaMunicipio(recorte),
+      ehGovernador ? doisMaisVotadosPorLocal(recorte) : Promise.resolve({ candidatos: [], locais: [] }),
     ])
-      .then(([k, p, t, pa, tb, zn, mu, lo, cf]) => {
+      .then(([k, p, t, pa, tb, zn, mu, lo, cf, dg]) => {
         if (!vivo) return
         setCarga({
           de: pedido, kpis: k[0] ?? null, participacao: p, top: t,
           partidos: pa, linhas: tb, zonas: zn, municipios: mu, locais: lo, conferencia: cf,
+          doisGovernador: dg,
         })
       })
       .catch((e: unknown) => {
@@ -89,7 +105,7 @@ export default function App() {
       })
     return () => { vivo = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pedido])
+  }, [pedido, ehGovernador, limiteTop])
 
   const VAZIO = useMemo(() => [], [])
   const dadosKpis = carga?.kpis ?? null
@@ -101,6 +117,7 @@ export default function App() {
   const municipios = carga?.municipios ?? VAZIO
   const locaisMapa = carga?.locais ?? VAZIO
   const conferencia = carga?.conferencia ?? VAZIO
+  const doisGovernador = carga?.doisGovernador ?? null
 
   // Slot de cor por partido, do total da série inteira — é o que faz a cor
   // seguir o partido em vez da posição no ranking de cada recorte.
@@ -184,6 +201,7 @@ export default function App() {
               <Mapa
                 municipios={municipios} locais={locaisMapa}
                 slots={slots} carregando={carregando}
+                doisGovernador={ehGovernador ? doisGovernador : null}
               />
               <RankingZonas dados={zonas} carregando={carregando} />
             </>

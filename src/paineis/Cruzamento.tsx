@@ -29,16 +29,42 @@ import { ATRIBUICAO_CARTO, CENTRO_PI, urlTilesCarto, ZOOM_PI } from '../viz/mapa
 
 type Slot = 'A' | 'B' | 'C' | 'D'
 const SLOTS: Slot[] = ['A', 'B', 'C', 'D']
-const CORES_SLOT: Record<Slot, string> = {
+
+// Cor do slot antes de ter candidato escolhido — sem partido ainda não dá
+// pra saber a cor de verdade, então é só um indicador de posição (A/B/C/D).
+// Vira o fallback do slot vazio no formulário; a cor de verdade (`coresCandidatos`)
+// assume assim que alguém é escolhido.
+const CORES_SLOT_SELECAO: Record<Slot, string> = {
   A: '#2a78d6', B: '#eb6834', C: '#1baf7a', D: '#4a3aa7',
 }
-// Vermelho → cinza → azul: domínio de B a domínio de A. Evita amarelo (baixo
-// contraste no modo claro) e segue a mesma lógica de rampa fixa do resto do app.
-const RAMPA_DIVERGENTE = ['#d03b3b', '#e59090', '#c3c2b7', '#86b6ef', '#2a78d6']
-function corDivergente(pctA: number): string {
-  const passos = RAMPA_DIVERGENTE.length - 1
-  const i = Math.min(passos, Math.max(0, Math.round((pctA / 100) * passos)))
-  return RAMPA_DIVERGENTE[i]
+
+/**
+ * Cor de cada candidato no resultado: PT sempre vermelho, PP sempre azul —
+ * mesma cor fixa do resto do painel — na ordem A, B, C, D (A tem prioridade:
+ * se A e B forem os dois do PT, só A fica vermelho). Um segundo candidato do
+ * mesmo partido, ou qualquer outro partido, cai na paleta genérica de
+ * posição, só pra distinguir visualmente — sem significado de identidade.
+ */
+const CORES_GENERICAS = ['#2a78d6', '#eb6834', '#1baf7a', '#4a3aa7'] as const
+
+function coresCandidatos(ativos: CandidatoCruzamento[]): Record<Slot, string> {
+  const cores = {} as Record<Slot, string>
+  let ptLivre = true
+  let ppLivre = true
+  let iGenerica = 0
+  for (const c of ativos) {
+    if (c.sgPartido === 'PT' && ptLivre) {
+      cores[c.slot] = '#E4142C'
+      ptLivre = false
+    } else if (c.sgPartido === 'PP' && ppLivre) {
+      cores[c.slot] = '#234F74'
+      ppLivre = false
+    } else {
+      cores[c.slot] = CORES_GENERICAS[iGenerica % CORES_GENERICAS.length]
+      iGenerica += 1
+    }
+  }
+  return cores
 }
 
 const CARGO_PADRAO: Record<string, string[]> = {
@@ -57,9 +83,10 @@ const MODO_MAPA = 'claro'
 const ALTURA_MAPA = 480
 
 function SeletorCandidato({
-  slot, eleicoes, cargos, anoPadrao, opcional, aoMudar,
+  slot, cor, eleicoes, cargos, anoPadrao, opcional, aoMudar,
 }: {
   slot: Slot
+  cor: string
   eleicoes: OpcaoEleicao[]
   cargos: OpcaoCargo[]
   anoPadrao: number
@@ -101,13 +128,14 @@ function SeletorCandidato({
     aoMudar({
       slot, skEleicao, cdCargo, skVotavel: v,
       nome: c.NM_URNA ?? c.NM_VOTAVEL, anoEleicao: e.ANO_ELEICAO, dsCargo: cg.DS_CARGO,
+      sgPartido: c.SG_PARTIDO,
     })
   }
 
   return (
     <div className="min-w-0 space-y-2 rounded-lg border borda p-3">
       <div className="flex items-baseline gap-1.5">
-        <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: CORES_SLOT[slot] }} />
+        <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: cor }} />
         <span className="text-sm font-semibold text-tinta">Candidato {slot}</span>
         {opcional && <span className="text-xs text-tinta-3">— opcional</span>}
       </div>
@@ -171,6 +199,7 @@ export function Cruzamento({
     [defs],
   )
   const n = ativos.length
+  const coresPorSlot = useMemo(() => coresCandidatos(ativos), [ativos])
 
   const chave = useMemo(
     () => `${JSON.stringify(ativos.map((d) => [d.skEleicao, d.cdCargo, d.skVotavel]))}|${cdMunicipio}`,
@@ -235,14 +264,12 @@ export function Cruzamento({
     return 2 + 8 * Math.sqrt(total / maxTamanho)
   }
 
+  // Líder do local, cor do próprio candidato — o mesmo critério em 1, 2, 3 ou
+  // 4 candidatos. Empate cai no de índice menor (A antes de B), então A
+  // também é quem "vence" um empate — é o candidato principal do cruzamento.
   function corPonto(l: LinhaCruzamento): string {
-    if (n === 1) return t.realce
-    if (n === 2) {
-      const total = l.VOTOS[0] + l.VOTOS[1]
-      return total ? corDivergente((l.VOTOS[0] / total) * 100) : RAMPA_DIVERGENTE[2]
-    }
     const lider = l.VOTOS.reduce((iMax, v, i) => (v > l.VOTOS[iMax] ? i : iMax), 0)
-    return CORES_SLOT[SLOTS[lider]]
+    return coresPorSlot[ativos[lider].slot]
   }
 
   function exportar() {
@@ -293,7 +320,8 @@ export function Cruzamento({
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {SLOTS.map((s) => (
             <SeletorCandidato
-              key={s} slot={s} eleicoes={eleicoes} cargos={cargos}
+              key={s} slot={s} cor={coresPorSlot[s] ?? CORES_SLOT_SELECAO[s]}
+              eleicoes={eleicoes} cargos={cargos}
               anoPadrao={s === 'A' ? anoA : anoBCD} opcional={s !== 'A'}
               aoMudar={(v) => setDefs((d) => ({ ...d, [s]: v }))}
             />
@@ -319,7 +347,7 @@ export function Cruzamento({
             {ativos.map((d, i) => (
               <div key={d.slot} className="rounded-xl border borda bg-superficie px-4 py-3">
                 <div className="flex items-center gap-1.5 text-tinta-3">
-                  <span aria-hidden className="size-2.5 rounded-full" style={{ background: CORES_SLOT[d.slot] }} />
+                  <span aria-hidden className="size-2.5 rounded-full" style={{ background: coresPorSlot[d.slot] }} />
                   <span className="truncate text-xs font-medium">
                     {d.slot} · {d.nome} ({d.anoEleicao})
                   </span>
@@ -349,9 +377,7 @@ export function Cruzamento({
 
           <div className="rounded-xl border borda bg-superficie p-4">
             <h3 className="text-sm font-semibold text-tinta">
-              {n === 1 && 'Distribuição territorial'}
-              {n === 2 && 'Domínio por local — azul A, vermelho B'}
-              {n >= 3 && 'Líder por local'}
+              {n === 1 ? 'Distribuição territorial' : 'Líder por local'}
             </h3>
             <div className="relative mt-3 overflow-hidden rounded-lg" style={{ height: ALTURA_MAPA }}>
               {!geo ? (

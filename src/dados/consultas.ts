@@ -284,7 +284,7 @@ export function candidatosDoCargo(skEleicao: number, cdCargo: number) {
 export type CandidatoCruzamento = {
   slot: 'A' | 'B' | 'C' | 'D'
   skEleicao: number; cdCargo: number; skVotavel: number
-  nome: string; anoEleicao: number; dsCargo: string
+  nome: string; anoEleicao: number; dsCargo: string; sgPartido: string | null
 }
 
 export type LinhaCruzamento = {
@@ -431,4 +431,76 @@ export function mapaLocais(f: Filtros) {
     LEFT JOIN eleitorado el USING (SK_LOCAL)
     WHERE la.LATITUDE_REF IS NOT NULL
   `)
+}
+
+export type CandidatoTopDois = {
+  SK_VOTAVEL: number; SK_PARTIDO: number | null; NOME: string; SG_PARTIDO: string | null; VOTOS: number
+}
+
+export type VotosDoisPorLocal = {
+  SK_LOCAL: number; NM_LOCAL: string; NM_MUNICIPIO: string
+  LAT: number; LON: number
+  VOTOS_A: number; VOTOS_B: number
+  PCT_COMPARECIMENTO: number | null
+}
+
+export type DoisMaisVotados = { candidatos: CandidatoTopDois[]; locais: VotosDoisPorLocal[] }
+
+/**
+ * Os dois candidatos mais votados do cargo/eleição do recorte, e o voto de
+ * cada um por local — usado só para o destaque de vencedor local no mapa de
+ * Governador, onde "os dois mais votados" é um fato da eleição, não do
+ * município filtrado. Por isso o top 2 ignora `cdMunicipio`; só o resultado
+ * por local respeita esse filtro, igual ao Cruzamento.
+ *
+ * Exige eleição e cargo específicos — sem os dois, "os dois mais votados" não
+ * tem resposta única (cargo municipal soma 224 disputas diferentes).
+ */
+export async function doisMaisVotadosPorLocal(f: Filtros): Promise<DoisMaisVotados> {
+  if (f.skEleicao === null || f.cdCargo === null) return { candidatos: [], locais: [] }
+
+  const candidatos = await consulta<CandidatoTopDois>(`
+    SELECT v.SK_VOTAVEL, v.SK_PARTIDO, COALESCE(v.NM_URNA, v.NM_VOTAVEL) AS NOME, p.SG_PARTIDO,
+           CAST(ROUND(SUM(f.QT_VOTOS_NORM)) AS BIGINT) AS VOTOS
+    FROM fato_votos f
+    JOIN dim_votavel v USING (SK_VOTAVEL)
+    LEFT JOIN dim_partido p USING (SK_PARTIDO)
+    WHERE f.SK_ELEICAO = ${f.skEleicao} AND f.CD_CARGO = ${f.cdCargo} AND v.TP_VOTO = 'Nominal'
+    GROUP BY 1, 2, 3, 4
+    ORDER BY VOTOS DESC
+    LIMIT 2
+  `)
+  if (candidatos.length < 2) return { candidatos, locais: [] }
+  const [a, b] = candidatos
+
+  const condMun = f.cdMunicipio !== null ? `AND la.CD_MUNICIPIO = ${f.cdMunicipio}` : ''
+  const locais = await consulta<VotosDoisPorLocal>(`
+    WITH votos AS (
+      SELECT SK_LOCAL,
+        CAST(ROUND(SUM(QT_VOTOS_NORM) FILTER (WHERE SK_VOTAVEL = ${a.SK_VOTAVEL})) AS BIGINT) AS VOTOS_A,
+        CAST(ROUND(SUM(QT_VOTOS_NORM) FILTER (WHERE SK_VOTAVEL = ${b.SK_VOTAVEL})) AS BIGINT) AS VOTOS_B
+      FROM fato_votos
+      WHERE SK_ELEICAO = ${f.skEleicao} AND CD_CARGO = ${f.cdCargo}
+        AND SK_VOTAVEL IN (${a.SK_VOTAVEL}, ${b.SK_VOTAVEL})
+      GROUP BY 1
+    ),
+    eleitorado AS (
+      SELECT SK_LOCAL,
+             ROUND(100.0 * SUM(QT_COMPARECIMENTO) / NULLIF(SUM(QT_APTOS), 0), 2) AS PCT
+      FROM fato_local
+      WHERE SK_ELEICAO = ${f.skEleicao}
+      GROUP BY 1
+    )
+    SELECT vo.SK_LOCAL, la.NM_LOCAL_REF AS NM_LOCAL, m.NM_MUNICIPIO,
+           la.LATITUDE_REF AS LAT, la.LONGITUDE_REF AS LON,
+           COALESCE(vo.VOTOS_A, 0) AS VOTOS_A, COALESCE(vo.VOTOS_B, 0) AS VOTOS_B,
+           el.PCT AS PCT_COMPARECIMENTO
+    FROM votos vo
+    JOIN dim_local_atual la USING (SK_LOCAL)
+    JOIN dim_municipio m ON m.CD_MUNICIPIO = la.CD_MUNICIPIO
+    LEFT JOIN eleitorado el USING (SK_LOCAL)
+    WHERE la.LATITUDE_REF IS NOT NULL ${condMun}
+  `)
+
+  return { candidatos, locais }
 }
