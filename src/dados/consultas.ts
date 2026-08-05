@@ -54,7 +54,10 @@ export function opcoes() {
  * Candidatos do recorte atual — opções do filtro global "Candidato".
  * Ignora o próprio `skVotavel` (senão reabrir a busca só mostraria quem já
  * está selecionado); os demais filtros (eleição, cargo, município, partido)
- * valem normalmente, então a lista já nasce curta na maioria dos recortes.
+ * valem normalmente, então a lista já nasce curta na maioria dos recortes —
+ * mas sem LIMIT, pelo mesmo motivo de `candidatosDoCargo`: Vereador sem
+ * município escolhido passa fácil de mil candidatos, e um corte aqui esconde
+ * gente da busca antes dela rodar.
  */
 export function opcoesVotavel(f: Filtros) {
   const cond = [condEleicao(f.skEleicao), "v.TP_VOTO = 'Nominal'"]
@@ -67,7 +70,6 @@ export function opcoesVotavel(f: Filtros) {
     WHERE ${cond.join(' AND ')}
     GROUP BY 1, 2, 3, 4
     ORDER BY SUM(f.QT_VOTOS_NORM) DESC
-    LIMIT 500
   `)
 }
 
@@ -267,6 +269,11 @@ export type OpcaoVotavel = {
  * candidatos de cargo municipal de outras cidades sem avisar por quê, e
  * parecia a lista travada. O recorte de município continua valendo no
  * resultado do cruzamento (mapa e tabela), só não na busca.
+ *
+ * Sem LIMIT: Vereador é o cargo mais fragmentado (~7.800 candidatos no
+ * estado inteiro em 2024) — um limite aqui cortava candidato de fora dos
+ * mais votados gerais da lista antes mesmo da busca rodar, então digitar o
+ * nome certinho não achava ninguém.
  */
 export function candidatosDoCargo(skEleicao: number, cdCargo: number) {
   return consulta<OpcaoVotavel>(`
@@ -277,7 +284,6 @@ export function candidatosDoCargo(skEleicao: number, cdCargo: number) {
     WHERE v.SK_ELEICAO = ${skEleicao} AND v.CD_CARGO = ${cdCargo} AND v.TP_VOTO = 'Nominal'
     GROUP BY 1, 2, 3, 4
     ORDER BY COALESCE(SUM(f.QT_VOTOS_NORM), 0) DESC
-    LIMIT 500
   `)
 }
 
