@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   conferenciaMunicipio, doisMaisVotadosPorLocal, kpis, mapaLocais, mapaMunicipios, opcoes,
-  participacao, tabela, topVotaveis, votosPorPartidoAno,
-  type DoisMaisVotados, type LocalMapa, type MunicipioMapa,
+  participacao, tabela, topPorLocal, topVotaveis, votosPorPartidoAno,
+  type DoisMaisVotados, type LocalMapa, type MunicipioMapa, type TopLocalCandidato,
   type Granularidade, type Kpis as DadosKpis, type LinhaConferencia, type LinhaTabela,
   type OpcaoCargo, type OpcaoEleicao, type OpcaoMunicipio, type OpcaoPartido, type OpcaoTurno,
   type Participacao as DadoParticipacao, type VotavelTop, type VotoPartido,
@@ -59,6 +59,7 @@ export default function App() {
     locais: LocalMapa[]
     conferencia: LinhaConferencia[]
     doisGovernador: DoisMaisVotados
+    topLocais: TopLocalCandidato[]
   }
   const [carga, setCarga] = useState<Carga | null>(null)
   const pedido = `${chave}|${grao}`
@@ -91,13 +92,14 @@ export default function App() {
       votosPorPartidoAno(recorte), tabela(recorte, grao), tabela(recorte, 'zona'),
       mapaMunicipios(recorte), mapaLocais(recorte), conferenciaMunicipio(recorte),
       ehGovernador ? doisMaisVotadosPorLocal(recorte) : Promise.resolve({ candidatos: [], locais: [] }),
+      topPorLocal(recorte),
     ])
-      .then(([k, p, t, pa, tb, zn, mu, lo, cf, dg]) => {
+      .then(([k, p, t, pa, tb, zn, mu, lo, cf, dg, tl]) => {
         if (!vivo) return
         setCarga({
           de: pedido, kpis: k[0] ?? null, participacao: p, top: t,
           partidos: pa, linhas: tb, zonas: zn, municipios: mu, locais: lo, conferencia: cf,
-          doisGovernador: dg,
+          doisGovernador: dg, topLocais: tl,
         })
       })
       .catch((e: unknown) => {
@@ -118,6 +120,7 @@ export default function App() {
   const locaisMapa = carga?.locais ?? VAZIO
   const conferencia = carga?.conferencia ?? VAZIO
   const doisGovernador = carga?.doisGovernador ?? null
+  const topLocais = carga?.topLocais ?? VAZIO
 
   // Slot de cor por partido, do total da série inteira — é o que faz a cor
   // seguir o partido em vez da posição no ranking de cada recorte.
@@ -202,6 +205,7 @@ export default function App() {
                 municipios={municipios} locais={locaisMapa}
                 slots={slots} carregando={carregando}
                 doisGovernador={ehGovernador ? doisGovernador : null}
+                topLocais={topLocais}
               />
               <RankingZonas dados={zonas} carregando={carregando} />
             </>

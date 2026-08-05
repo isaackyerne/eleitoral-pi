@@ -433,6 +433,32 @@ export function mapaLocais(f: Filtros) {
   `)
 }
 
+export type TopLocalCandidato = {
+  SK_LOCAL: number; SK_VOTAVEL: number; NOME: string; SG_PARTIDO: string | null; VOTOS: number
+}
+
+/**
+ * Os mais votados de cada local, no recorte atual — pensado pro tooltip de
+ * "Locais de votação" no Mapa, onde só total e comparecimento não dizem quem
+ * puxou o voto ali. Inclui branco e nulo, igual ao ranking geral, pra manter
+ * a mesma régua de "dá contexto".
+ */
+export function topPorLocal(f: Filtros, limite = 5) {
+  return consulta<TopLocalCandidato>(`
+    WITH candidatos AS (
+      SELECT f.SK_LOCAL, f.SK_VOTAVEL, COALESCE(v.NM_URNA, v.NM_VOTAVEL) AS NOME, p.SG_PARTIDO,
+             CAST(ROUND(SUM(f.QT_VOTOS_NORM)) AS BIGINT) AS VOTOS,
+             ROW_NUMBER() OVER (PARTITION BY f.SK_LOCAL ORDER BY SUM(f.QT_VOTOS_NORM) DESC) AS pos
+      ${FATO} LEFT JOIN dim_partido p USING (SK_PARTIDO)
+      WHERE ${clausulas(f)}
+      GROUP BY 1, 2, 3, 4
+    )
+    SELECT SK_LOCAL, SK_VOTAVEL, NOME, SG_PARTIDO, VOTOS
+    FROM candidatos WHERE pos <= ${limite}
+    ORDER BY SK_LOCAL, pos
+  `)
+}
+
 export type CandidatoTopDois = {
   SK_VOTAVEL: number; SK_PARTIDO: number | null; NOME: string; SG_PARTIDO: string | null; VOTOS: number
 }

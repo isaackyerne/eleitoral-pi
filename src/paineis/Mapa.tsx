@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip } from 'react-leaflet'
 import type { Layer } from 'leaflet'
 import type { Feature, FeatureCollection } from 'geojson'
-import type { DoisMaisVotados, LocalMapa, MunicipioMapa } from '../dados/consultas'
+import type { DoisMaisVotados, LocalMapa, MunicipioMapa, TopLocalCandidato } from '../dados/consultas'
 import { useColapso } from '../estado/colapso'
 import { useFiltros } from '../estado/filtros'
 import { BotaoColapsar } from '../ui/BotaoColapsar'
@@ -33,13 +33,14 @@ type Pintura = 'partido' | 'comparecimento'
 const ALTURA = 640
 
 export function Mapa({
-  municipios, locais, slots, carregando, doisGovernador,
+  municipios, locais, slots, carregando, doisGovernador, topLocais,
 }: {
   municipios: MunicipioMapa[]
   locais: LocalMapa[]
   slots: Map<number, number>
   carregando: boolean
   doisGovernador: DoisMaisVotados | null
+  topLocais: TopLocalCandidato[]
 }) {
   const doisCandidatos = (doisGovernador?.candidatos.length ?? 0) === 2 ? doisGovernador : null
   const t = TINTA[MODO_MAPA]
@@ -72,6 +73,17 @@ export function Mapa({
     for (const d of municipios) m.set(d.CD_MUNICIPIO_IBGE, d)
     return m
   }, [municipios])
+
+  // Mais votados de cada local — já vem em até 5 por SK_LOCAL, só agrupar.
+  const topPorLocalMap = useMemo(() => {
+    const m = new Map<number, TopLocalCandidato[]>()
+    for (const d of topLocais) {
+      const lista = m.get(d.SK_LOCAL)
+      if (lista) lista.push(d)
+      else m.set(d.SK_LOCAL, [d])
+    }
+    return m
+  }, [topLocais])
 
   const faixa = useMemo(() => {
     const vs = municipios.map((d) => d.PCT_COMPARECIMENTO).filter((v): v is number => v !== null)
@@ -227,21 +239,36 @@ export function Mapa({
                   )
                 })}
               {camada === 'locais' && !doisCandidatos &&
-                locais.map((p) => (
-                  <CircleMarker
-                    key={p.SK_LOCAL} center={[p.LAT, p.LON]} radius={3}
-                    pathOptions={{ color: t.realce, weight: 0, fillOpacity: 0.55 }}
-                  >
-                    <Tooltip sticky>
-                      <div className="font-medium">{p.NM_LOCAL}</div>
-                      <div>{p.NM_MUNICIPIO}</div>
-                      <div className="tabular mt-1">
-                        {formataInteiro(p.VOTOS)} votos
-                        {p.PCT_COMPARECIMENTO !== null && ` · ${formataPct(p.PCT_COMPARECIMENTO)}`}
-                      </div>
-                    </Tooltip>
-                  </CircleMarker>
-                ))}
+                locais.map((p) => {
+                  const top = topPorLocalMap.get(p.SK_LOCAL)
+                  return (
+                    <CircleMarker
+                      key={p.SK_LOCAL} center={[p.LAT, p.LON]} radius={3}
+                      pathOptions={{ color: t.realce, weight: 0, fillOpacity: 0.55 }}
+                    >
+                      <Tooltip sticky>
+                        <div className="font-medium">{p.NM_LOCAL}</div>
+                        <div>{p.NM_MUNICIPIO}</div>
+                        <div className="tabular mt-1">
+                          {formataInteiro(p.VOTOS)} votos
+                          {p.PCT_COMPARECIMENTO !== null && ` · ${formataPct(p.PCT_COMPARECIMENTO)}`}
+                        </div>
+                        {top && top.length > 0 && (
+                          <ol className="tabular mt-1.5 space-y-0.5 border-t border-black/10 pt-1.5">
+                            {top.map((c, i) => (
+                              <li key={c.SK_VOTAVEL} className="flex items-baseline gap-3">
+                                <span className="min-w-0 flex-1 truncate">
+                                  {i + 1}. {c.NOME}{c.SG_PARTIDO && ` · ${c.SG_PARTIDO}`}
+                                </span>
+                                <span className="shrink-0">{formataInteiro(c.VOTOS)}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                      </Tooltip>
+                    </CircleMarker>
+                  )
+                })}
             </MapContainer>
           )}
         </div>
@@ -272,7 +299,8 @@ export function Mapa({
               </>
             ) : (
               <p className="text-sm text-tinta-2">
-                Cada ponto é um local de votação — escola, posto, câmara.
+                Cada ponto é um local de votação — escola, posto, câmara. Passe
+                o mouse pra ver os 5 mais votados ali.
                 <span className="mt-1 block text-tinta-3">
                   {formataInteiro(locais.length)} têm endereço geolocalizado. Os
                   poucos sem coordenada não aparecem aqui, mas seguem contados nos
