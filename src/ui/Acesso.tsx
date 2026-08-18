@@ -114,14 +114,9 @@ function TelaLogin() {
             className="grid size-10 shrink-0 place-items-center rounded-xl bg-realce font-semibold text-white">
             PI
           </div>
-          <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight text-tinta">
-              Eleições do Piauí
-            </h1>
-            <p className="text-sm text-tinta-2">
-              Painel de 2018 a 2024, a partir dos dados abertos do TSE.
-            </p>
-          </div>
+          <h1 className="min-w-0 truncate text-lg font-semibold tracking-tight text-tinta">
+            Eleições do Piauí
+          </h1>
         </header>
 
         <SignIn routing="hash" withSignUp={false} fallbackRedirectUrl="/" />
