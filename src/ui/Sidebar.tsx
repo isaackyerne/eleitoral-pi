@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { useFiltros } from '../estado/filtros'
 import { SECOES, useNavegacao, type SecaoId } from '../estado/navegacao'
+import { Conta } from './Acesso'
 import { AlternadorTema } from './AlternadorTema'
 
 /**
@@ -167,6 +168,7 @@ export function Sidebar() {
         </div>
 
         <div className="shrink-0 space-y-2 border-t borda p-2">
+          <Conta recolhida={recolhida} />
           <div className={recolhida ? 'md:hidden' : ''}>
             <AlternadorTema />
           </div>

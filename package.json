@@ -13,6 +13,8 @@
     "prebuild": "npm run dados"
   },
   "dependencies": {
+    "@clerk/localizations": "^4.15.4",
+    "@clerk/react": "^6.14.3",
     "@duckdb/duckdb-wasm": "^1.33.1-dev57.0",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.14.9",
