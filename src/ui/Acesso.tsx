@@ -82,6 +82,7 @@ export function ProvedorAcesso({ children }: { children: ReactNode }) {
   const modo = useTema()
   return (
     <ClerkProvider
+      publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}
       afterSignOutUrl="/"
       localization={IDIOMA}
       appearance={{ variables: CORES[modo] }}
