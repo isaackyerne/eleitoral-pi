@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   conferenciaMunicipio, doisMaisVotadosPorLocal, kpis, mapaLocais, mapaMunicipios, opcoes,
   participacao, tabela, topPorLocal, topVotaveis, votosPorPartidoAno,
@@ -8,6 +8,7 @@ import {
   type Participacao as DadoParticipacao, type VotavelTop, type VotoPartido,
 } from './dados/consultas'
 import { useFiltros, type Filtros as TipoFiltros } from './estado/filtros'
+import { useMeuCandidato } from './estado/meuCandidato'
 import { SECOES, useNavegacao } from './estado/navegacao'
 import { useTema } from './estado/tema'
 import { Conferencia } from './paineis/Conferencia'
@@ -84,6 +85,23 @@ export default function App() {
       )
       .catch((e: unknown) => setErro(e instanceof Error ? e.message : String(e)))
   }, [])
+
+  // Aplica "meu candidato" nos filtros uma vez só, ao entrar — nunca de novo
+  // depois, senão sobrescreveria um filtro que o usuário já trocou na mão.
+  const { candidato: meuCandidato, pronto: meuCandidatoPronto } = useMeuCandidato()
+  const aplicouMeuCandidato = useRef(false)
+  useEffect(() => {
+    if (!meuCandidatoPronto || aplicouMeuCandidato.current || !meuCandidato) return
+    aplicouMeuCandidato.current = true
+    filtros.definir('skEleicaoBase', meuCandidato.skEleicaoBase)
+    filtros.definirRotulo('skEleicao', meuCandidato.rotuloEleicao)
+    filtros.definir('skEleicao', meuCandidato.skEleicao)
+    filtros.definir('cdCargo', meuCandidato.cdCargo)
+    filtros.definirRotulo('cdCargo', meuCandidato.rotuloCargo)
+    filtros.definir('skVotavel', meuCandidato.skVotavel)
+    filtros.definirRotulo('skVotavel', meuCandidato.rotuloCandidato)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meuCandidatoPronto, meuCandidato])
 
   useEffect(() => {
     let vivo = true

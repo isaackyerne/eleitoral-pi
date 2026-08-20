@@ -5,7 +5,62 @@ import {
   type OpcaoTurno, type OpcaoVotavel,
 } from '../dados/consultas'
 import { useFiltros } from '../estado/filtros'
+import { useMeuCandidato } from '../estado/meuCandidato'
 import { Busca, Campo, Seletor } from '../ui/Campo'
+
+/**
+ * Estrela ao lado do filtro Candidato: salva (ou remove) o recorte
+ * atual — eleição, cargo e candidato — como "meu candidato" na conta do
+ * usuário. Fica desabilitada sem um candidato escolhido; não há nada pra
+ * salvar nesse caso.
+ */
+function BotaoMeuCandidato() {
+  const f = useFiltros()
+  const { candidato, salvar, remover, pronto } = useMeuCandidato()
+  const [salvando, setSalvando] = useState(false)
+
+  const ehOMeu = candidato !== null && candidato.skVotavel === f.skVotavel
+  const podeSalvar = f.skVotavel !== null && f.skEleicaoBase !== null
+    && f.skEleicao !== null && f.cdCargo !== null
+
+  async function alternar() {
+    setSalvando(true)
+    try {
+      if (ehOMeu) {
+        await remover()
+      } else if (podeSalvar) {
+        await salvar({
+          skEleicaoBase: f.skEleicaoBase!, skEleicao: f.skEleicao!, cdCargo: f.cdCargo!,
+          skVotavel: f.skVotavel!,
+          rotuloEleicao: f.rotulos.skEleicao ?? '', rotuloCargo: f.rotulos.cdCargo ?? '',
+          rotuloCandidato: f.rotulos.skVotavel ?? '',
+        })
+      }
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  if (!pronto) return null
+
+  return (
+    <button
+      type="button"
+      onClick={alternar}
+      disabled={salvando || (!podeSalvar && !ehOMeu)}
+      aria-pressed={ehOMeu}
+      title={ehOMeu ? 'Remover como meu candidato' : 'Salvar como meu candidato'}
+      className={`h-9 shrink-0 rounded-lg border borda px-2 transition disabled:opacity-40 ${
+        ehOMeu ? 'text-realce' : 'text-tinta-3 hover:bg-tinta/5 hover:text-tinta'
+      }`}
+    >
+      <svg viewBox="0 0 24 24" className="size-4" fill={ehOMeu ? 'currentColor' : 'none'}
+        stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M12 2.5l3.09 6.26 6.91 1-5 4.87 1.18 6.87L12 17.77l-6.18 3.73L7 14.63l-5-4.87 6.91-1L12 2.5z" />
+      </svg>
+    </button>
+  )
+}
 
 /**
  * Barra de filtros — governa todos os painéis.
@@ -140,19 +195,24 @@ export function Filtros({
       </Campo>
 
       <Campo rotulo="Candidato">
-        <Busca
-          valor={f.skVotavel}
-          vazio="Todos os candidatos"
-          placeholder="Buscar candidato…"
-          opcoes={candidatos.map((c) => ({
-            valor: c.SK_VOTAVEL,
-            rotulo: `${c.NM_URNA ?? c.NM_VOTAVEL}${c.SG_PARTIDO ? ` · ${c.SG_PARTIDO}` : ''}`,
-          }))}
-          aoMudar={(v, rotulo) => {
-            f.definir('skVotavel', v)
-            f.definirRotulo('skVotavel', rotulo)
-          }}
-        />
+        <div className="flex items-center gap-1.5">
+          <div className="min-w-0 flex-1">
+            <Busca
+              valor={f.skVotavel}
+              vazio="Todos os candidatos"
+              placeholder="Buscar candidato…"
+              opcoes={candidatos.map((c) => ({
+                valor: c.SK_VOTAVEL,
+                rotulo: `${c.NM_URNA ?? c.NM_VOTAVEL}${c.SG_PARTIDO ? ` · ${c.SG_PARTIDO}` : ''}`,
+              }))}
+              aoMudar={(v, rotulo) => {
+                f.definir('skVotavel', v)
+                f.definirRotulo('skVotavel', rotulo)
+              }}
+            />
+          </div>
+          <BotaoMeuCandidato />
+        </div>
       </Campo>
     </div>
   )
