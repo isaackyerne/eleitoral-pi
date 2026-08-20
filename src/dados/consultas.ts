@@ -102,8 +102,8 @@ export function participacao(f: Filtros) {
   if (f.cdMunicipio !== null) cond.push(`l.CD_MUNICIPIO = ${f.cdMunicipio}`)
   return consulta<Participacao>(`
     SELECT e.ANO_ELEICAO, e.TP_ESFERA,
-           SUM(fl.QT_APTOS) AS QT_APTOS,
-           SUM(fl.QT_COMPARECIMENTO) AS QT_COMPARECIMENTO,
+           CAST(SUM(fl.QT_APTOS) AS BIGINT) AS QT_APTOS,
+           CAST(SUM(fl.QT_COMPARECIMENTO) AS BIGINT) AS QT_COMPARECIMENTO,
            ROUND(100.0 * SUM(fl.QT_COMPARECIMENTO) / SUM(fl.QT_APTOS), 2) AS PCT_COMPARECIMENTO
     FROM fato_local fl
     JOIN dim_eleicao e USING (SK_ELEICAO)
@@ -202,8 +202,8 @@ export function tabela(f: Filtros, grao: Granularidade) {
     ),
     eleitorado AS (
       SELECT ${chaveEleitorado} AS CHAVE,
-             SUM(fl.QT_APTOS) AS APTOS,
-             SUM(fl.QT_COMPARECIMENTO) AS COMPARECIMENTO
+             CAST(SUM(fl.QT_APTOS) AS BIGINT) AS APTOS,
+             CAST(SUM(fl.QT_COMPARECIMENTO) AS BIGINT) AS COMPARECIMENTO
       FROM fato_local fl
       JOIN dim_eleicao e USING (SK_ELEICAO)
       JOIN dim_local   l ON l.SK_LOCAL = fl.SK_LOCAL AND l.SK_ELEICAO = fl.SK_ELEICAO

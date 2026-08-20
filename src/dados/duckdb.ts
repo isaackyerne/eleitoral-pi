@@ -74,6 +74,12 @@ export function consulta<T = Record<string, unknown>>(sql: string): Promise<T[]>
     return resultado.toArray().map((linha) => {
       const obj = linha.toJSON() as Record<string, unknown>
       // O Arrow devolve inteiros grandes como BigInt, que quebra o Recharts.
+      // SUM() sobre coluna INTEGER também promove pra HUGEINT (128 bits) do
+      // lado do DuckDB — sem CAST(... AS BIGINT) no SQL, o Arrow devolve isso
+      // como array de 4 words em vez de BigInt, e não passa por aqui: vira
+      // "12.345,0,0,0" quando formatado, porque Array.toLocaleString() junta
+      // os elementos com vírgula. Não dá pra converter isso de volta pra
+      // número certo aqui — resolve na consulta, com CAST explícito.
       for (const [k, v] of Object.entries(obj)) {
         if (typeof v === 'bigint') obj[k] = Number(v)
       }
