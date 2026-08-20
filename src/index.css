@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/**
+ * Tema em duas colunas.
+ *
+ * Os valores vêm da paleta validada (src/viz/paleta.ts) — as duas colunas
+ * passaram no validador contra a sua própria superfície. `@theme inline` faz o
+ * utilitário do Tailwind resolver para `var()` em tempo de execução, que é o
+ * que permite trocar de tema sem recompilar.
+ */
+
+@theme inline {
+  --color-superficie: var(--pi-superficie);
+  --color-plano: var(--pi-plano);
+  --color-tinta: var(--pi-tinta);
+  --color-tinta-2: var(--pi-tinta-2);
+  --color-tinta-3: var(--pi-tinta-3);
+  --color-grade: var(--pi-grade);
+  --color-eixo: var(--pi-eixo);
+  --color-realce: var(--pi-realce);
+}
+
+/**
+ * Escuro é o padrão, então mora na raiz — assim o primeiro paint já nasce
+ * certo, mesmo antes do JS. O claro é o escopo que sobrescreve.
+ *
+ * 'Seguir o sistema' é resolvido em JS (estado/tema.ts), que sempre grava um
+ * modo concreto em `data-tema`. Por isso não há media query aqui: uma regra a
+ * menos para manter em sincronia com o script inline do index.html.
+ */
+:root {
+  --pi-superficie: #1a1a19;
+  --pi-plano: #0d0d0d;
+  --pi-tinta: #ffffff;
+  --pi-tinta-2: #c3c2b7;
+  --pi-tinta-3: #898781;
+  --pi-grade: #2c2c2a;
+  --pi-eixo: #383835;
+  --pi-borda: rgb(255 255 255 / 0.1);
+  --pi-realce: #3987e5;
+  color-scheme: dark;
+}
+
+:root[data-tema='claro'] {
+  --pi-superficie: #fcfcfb;
+  --pi-plano: #f9f9f7;
+  --pi-tinta: #0b0b0b;
+  --pi-tinta-2: #52514e;
+  --pi-tinta-3: #898781;
+  --pi-grade: #e1e0d9;
+  --pi-eixo: #c3c2b7;
+  --pi-borda: rgb(11 11 11 / 0.1);
+  --pi-realce: #2a78d6;
+  color-scheme: light;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Hairline que acompanha o tema. */
+.borda {
+  border-color: var(--pi-borda);
+}
+
+/* Colunas numéricas alinham; o resto usa figuras proporcionais. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tooltip do Leaflet (mapa) no tema do painel — o padrão do Leaflet é um
+   balão branco fixo, que destoa no escuro. */
+.leaflet-tooltip.mapa-tooltip,
+.leaflet-tooltip {
+  background: var(--pi-superficie);
+  color: var(--pi-tinta);
+  border: 1px solid var(--pi-borda);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+  font-size: 0.8125rem;
+  padding: 0.5rem 0.625rem;
+}
+.leaflet-tooltip-top:before,
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+  border-top-color: var(--pi-superficie);
+}
+.leaflet-container {
+  font-family: inherit;
+}

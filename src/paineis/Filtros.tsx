@@ -1,0 +1,222 @@
+import { useEffect, useState } from 'react'
+import {
+  opcoesVotavel,
+  type OpcaoCargo, type OpcaoEleicao, type OpcaoMunicipio, type OpcaoPartido,
+  type OpcaoTurno, type OpcaoVotavel,
+} from '../dados/consultas'
+import { useFiltros } from '../estado/filtros'
+import { useMeuCandidato } from '../estado/meuCandidato'
+import { Busca, Campo, Seletor } from '../ui/Campo'
+
+/**
+ * Estrela ao lado do filtro Candidato: salva (ou remove) o recorte
+ * atual — eleição, cargo e candidato — como "meu candidato" na conta do
+ * usuário. Fica desabilitada sem um candidato escolhido; não há nada pra
+ * salvar nesse caso.
+ */
+function BotaoMeuCandidato() {
+  const f = useFiltros()
+  const { candidato, salvar, remover, pronto } = useMeuCandidato()
+  const [salvando, setSalvando] = useState(false)
+
+  const ehOMeu = candidato !== null && candidato.skVotavel === f.skVotavel
+  const podeSalvar = f.skVotavel !== null && f.skEleicaoBase !== null
+    && f.skEleicao !== null && f.cdCargo !== null
+
+  async function alternar() {
+    setSalvando(true)
+    try {
+      if (ehOMeu) {
+        await remover()
+      } else if (podeSalvar) {
+        await salvar({
+          skEleicaoBase: f.skEleicaoBase!, skEleicao: f.skEleicao!, cdCargo: f.cdCargo!,
+          skVotavel: f.skVotavel!,
+          rotuloEleicao: f.rotulos.skEleicao ?? '', rotuloCargo: f.rotulos.cdCargo ?? '',
+          rotuloCandidato: f.rotulos.skVotavel ?? '',
+        })
+      }
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  if (!pronto) return null
+
+  return (
+    <button
+      type="button"
+      onClick={alternar}
+      disabled={salvando || (!podeSalvar && !ehOMeu)}
+      aria-pressed={ehOMeu}
+      title={ehOMeu ? 'Remover como meu candidato' : 'Salvar como meu candidato'}
+      className={`h-9 shrink-0 rounded-lg border borda px-2 transition disabled:opacity-40 ${
+        // Dourado fixo, não a cor de realce do painel — o mesmo azul já
+        // significa "ativo" em botão, aba e foco; a estrela precisa de uma
+        // cor só dela pra "salvo" não se confundir com o resto da UI.
+        ehOMeu ? 'text-[#eab308]' : 'text-tinta-3 hover:bg-tinta/5 hover:text-tinta'
+      }`}
+    >
+      <svg viewBox="0 0 24 24" className="size-4" fill={ehOMeu ? 'currentColor' : 'none'}
+        stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M12 2.5l3.09 6.26 6.91 1-5 4.87 1.18 6.87L12 17.77l-6.18 3.73L7 14.63l-5-4.87 6.91-1L12 2.5z" />
+      </svg>
+    </button>
+  )
+}
+
+/**
+ * Barra de filtros — governa todos os painéis.
+ *
+ * A eleição vem primeiro porque manda no resto: os códigos de cargo são
+ * disjuntos entre esferas ({3,5,6,7} estadual, {11,13} municipal), então trocar
+ * de ano pode invalidar o cargo escolhido — o store zera esse campo sozinho.
+ *
+ * O seletor de Eleição só lista 1º turno (`FL_SERIE_PRINCIPAL`) — é o
+ * guardrail do modelo. O Turno aparece do lado quando a eleição escolhida
+ * tiver 2º turno (hoje só 2020) e troca qual `SK_ELEICAO` de fato filtra,
+ * sem tirar a eleição da lista principal.
+ *
+ * O Candidato busca o próprio recorte (eleição, cargo, município, partido já
+ * escolhidos), então a lista já nasce curta na maioria das vezes — e o
+ * `SK_VOTAVEL` só existe dentro do (eleição, cargo) em que foi gerado, então
+ * trocar qualquer um dos dois zera a seleção sozinho, como o store já faz.
+ */
+export function Filtros({
+  eleicoes, cargos, municipios, partidos, turnos,
+}: {
+  eleicoes: OpcaoEleicao[]
+  cargos: OpcaoCargo[]
+  municipios: OpcaoMunicipio[]
+  partidos: OpcaoPartido[]
+  turnos: OpcaoTurno[]
+}) {
+  const f = useFiltros()
+  const esfera = eleicoes.find((e) => e.SK_ELEICAO === f.skEleicaoBase)?.TP_ESFERA
+  const cargosValidos = esfera ? cargos.filter((c) => c.TP_ESFERA === esfera) : cargos
+
+  const anoBase = eleicoes.find((e) => e.SK_ELEICAO === f.skEleicaoBase)?.ANO_ELEICAO
+  const turnosDoAno = anoBase !== undefined ? turnos.filter((t) => t.ANO_ELEICAO === anoBase) : []
+
+  const [candidatos, setCandidatos] = useState<OpcaoVotavel[]>([])
+  useEffect(() => {
+    let vivo = true
+    opcoesVotavel({ ...f, skVotavel: null }).then((r) => { if (vivo) setCandidatos(r) })
+    return () => { vivo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.skEleicao, f.cdCargo, f.cdMunicipio, f.skPartido])
+
+  return (
+    <div className="grid grid-cols-2 gap-3 rounded-xl border borda bg-superficie p-4 sm:grid-cols-3 lg:grid-cols-5">
+      <Campo rotulo="Eleição">
+        <Seletor
+          valor={f.skEleicaoBase}
+          vazio="Todas as eleições"
+          opcoes={eleicoes.map((e) => ({
+            valor: e.SK_ELEICAO,
+            rotulo: `${e.ANO_ELEICAO} · ${e.TP_ESFERA}`,
+          }))}
+          aoMudar={(v) => {
+            f.definir('skEleicaoBase', v)
+            f.definir('skEleicao', v)
+            const e = eleicoes.find((x) => x.SK_ELEICAO === v)
+            f.definirRotulo('skEleicao', e ? `${e.ANO_ELEICAO} · ${e.TP_ESFERA}` : null)
+            f.definirRotulo('cdCargo', null)
+          }}
+        />
+      </Campo>
+
+      {turnosDoAno.length > 1 && (
+        <Campo rotulo="Turno">
+          <div role="radiogroup" aria-label="Turno" className="flex h-9 gap-1">
+            {turnosDoAno.map((t) => (
+              <button
+                key={t.NR_TURNO}
+                type="button"
+                role="radio"
+                aria-checked={f.skEleicao === t.SK_ELEICAO}
+                onClick={() => {
+                  f.definir('skEleicao', t.SK_ELEICAO)
+                  const e = eleicoes.find((x) => x.SK_ELEICAO === f.skEleicaoBase)
+                  f.definirRotulo(
+                    'skEleicao',
+                    e ? `${e.ANO_ELEICAO} · ${e.TP_ESFERA}${t.NR_TURNO === 2 ? ' · 2º turno' : ''}` : null,
+                  )
+                }}
+                className={`flex-1 rounded-lg border borda text-sm transition ${
+                  f.skEleicao === t.SK_ELEICAO
+                    ? 'bg-realce/10 font-medium text-realce'
+                    : 'text-tinta-2 hover:bg-tinta/5'
+                }`}
+              >
+                {t.NR_TURNO}º turno
+              </button>
+            ))}
+          </div>
+        </Campo>
+      )}
+
+      <Campo rotulo="Cargo">
+        <Seletor
+          valor={f.cdCargo}
+          vazio="Todos os cargos"
+          opcoes={cargosValidos.map((c) => ({ valor: c.CD_CARGO, rotulo: c.DS_CARGO }))}
+          aoMudar={(v) => {
+            f.definir('cdCargo', v)
+            f.definirRotulo('cdCargo', cargos.find((c) => c.CD_CARGO === v)?.DS_CARGO ?? null)
+          }}
+        />
+      </Campo>
+
+      <Campo rotulo="Município">
+        <Busca
+          valor={f.cdMunicipio}
+          vazio="Todos os municípios"
+          placeholder="Buscar município…"
+          opcoes={municipios.map((m) => ({ valor: m.CD_MUNICIPIO, rotulo: m.NM_MUNICIPIO }))}
+          aoMudar={(v, rotulo) => {
+            f.definir('cdMunicipio', v)
+            f.definirRotulo('cdMunicipio', rotulo)
+          }}
+        />
+      </Campo>
+
+      <Campo rotulo="Partido">
+        <Busca
+          valor={f.skPartido}
+          vazio="Todos os partidos"
+          placeholder="Buscar partido…"
+          opcoes={partidos.map((p) => ({
+            valor: p.SK_PARTIDO,
+            rotulo: `${p.SG_PARTIDO} — ${p.NM_PARTIDO}`,
+          }))}
+          aoMudar={(v, rotulo) => {
+            f.definir('skPartido', v)
+            f.definirRotulo('skPartido', rotulo?.split(' — ')[0] ?? null)
+          }}
+        />
+      </Campo>
+
+      <Campo rotulo="Candidato">
+        <div className="flex items-center gap-1.5">
+          <div className="min-w-0 flex-1">
+            <Busca
+              valor={f.skVotavel}
+              vazio="Todos os candidatos"
+              placeholder="Buscar candidato…"
+              opcoes={candidatos.map((c) => ({
+                valor: c.SK_VOTAVEL,
+                rotulo: `${c.NM_URNA ?? c.NM_VOTAVEL}${c.SG_PARTIDO ? ` · ${c.SG_PARTIDO}` : ''}`,
+              }))}
+              aoMudar={(v, rotulo) => {
+                f.definir('skVotavel', v)
+                f.definirRotulo('skVotavel', rotulo)
+              }}
+            />
+          </div>
+          <BotaoMeuCandidato />
+        </div>
+      </Campo>
+    </div>
+  )
+}

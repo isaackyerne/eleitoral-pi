@@ -1,0 +1,62 @@
+# ─── Dados (pipeline eleitoral) ──────────────────────────────────────────
+# O scaffold do Vite sobrescreve este arquivo. Se rodar `npm create vite`
+# de novo, restaure este bloco: sem ele, `git add -A` tenta commitar ~4 GB
+# e o push quebra no limite de 100 MB por arquivo do GitHub.
+
+# Brutos do TSE, baixados à mão (~330 MB)
+*.zip
+
+# CSVs extraídos dos zips (~2 GB)
+dados/2018/
+dados/2020/
+dados/2022/
+dados/2024/
+
+# Camada intermediária por ano (~430 MB; arquivos de até 149 MB)
+dados/processados/*.csv
+
+# Arquivos de candidatura e resultado baixados do TSE (~1,3 GB)
+dados/brutos_tse/
+
+# A base unificada (dados/processados/unificado/*.parquet) NÃO é ignorada:
+# são 5,5 MB e é o entregável que o dashboard consome.
+
+# Notas de contexto locais
+CLAUDE.md
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# ─── Node / Vite ─────────────────────────────────────────────────────────
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Cópia dos parquets servida pelo Vite (fonte versionada em dados/processados/unificado/)
+public/dados/
