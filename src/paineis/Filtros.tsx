@@ -51,7 +51,10 @@ function BotaoMeuCandidato() {
       aria-pressed={ehOMeu}
       title={ehOMeu ? 'Remover como meu candidato' : 'Salvar como meu candidato'}
       className={`h-9 shrink-0 rounded-lg border borda px-2 transition disabled:opacity-40 ${
-        ehOMeu ? 'text-realce' : 'text-tinta-3 hover:bg-tinta/5 hover:text-tinta'
+        // Dourado fixo, não a cor de realce do painel — o mesmo azul já
+        // significa "ativo" em botão, aba e foco; a estrela precisa de uma
+        // cor só dela pra "salvo" não se confundir com o resto da UI.
+        ehOMeu ? 'text-[#eab308]' : 'text-tinta-3 hover:bg-tinta/5 hover:text-tinta'
       }`}
     >
       <svg viewBox="0 0 24 24" className="size-4" fill={ehOMeu ? 'currentColor' : 'none'}
