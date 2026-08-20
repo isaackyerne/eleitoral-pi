@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip as TooltipMapa } from 'react-leaflet'
+import {
+  CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as TooltipGrafico, XAxis, YAxis,
+} from 'recharts'
 import type { FeatureCollection } from 'geojson'
 import {
   candidatosDoCargo, cruzamento,
@@ -10,7 +13,7 @@ import {
 import { exportarExcel } from '../dados/excel'
 import { Busca, Campo, Seletor } from '../ui/Campo'
 import { Nota } from '../ui/Nota'
-import { TINTA, formataInteiro, formataPct } from '../viz/paleta'
+import { TINTA, formataCompacto, formataInteiro, formataPct } from '../viz/paleta'
 import { ATRIBUICAO_CARTO, CENTRO_PI, urlTilesCarto, ZOOM_PI } from '../viz/mapabase'
 
 /**
@@ -65,6 +68,39 @@ function coresCandidatos(ativos: CandidatoCruzamento[]): Record<Slot, string> {
     }
   }
   return cores
+}
+
+type LinhaMunicipio = { municipio: string; total: number } & Partial<Record<Slot, number>>
+
+function DicaMunicipio({
+  active, payload, label, ativos, coresPorSlot,
+}: {
+  active?: boolean
+  payload?: readonly { dataKey?: unknown; value?: unknown }[]
+  label?: string | number
+  ativos: CandidatoCruzamento[]
+  coresPorSlot: Record<Slot, string>
+}) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="rounded-lg border borda bg-superficie px-3 py-2 text-sm shadow-lg">
+      <div className="font-medium text-tinta">{label}</div>
+      <div className="mt-1 space-y-0.5">
+        {ativos.map((d) => {
+          const item = payload.find((p) => p.dataKey === d.slot)
+          return (
+            <div key={d.slot} className="flex items-center gap-2">
+              <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: coresPorSlot[d.slot] }} />
+              <span className="min-w-0 truncate text-tinta-2">{d.nome}</span>
+              <span className="tabular ml-auto text-tinta">
+                {formataInteiro(typeof item?.value === 'number' ? item.value : 0)}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 const CARGO_PADRAO: Record<string, string[]> = {
@@ -251,6 +287,28 @@ export function Cruzamento({
     () => linhas.filter((l) => l.VOTOS.every((v) => v > 0)).length,
     [linhas],
   )
+
+  // Os 15 municípios com mais voto somado — mesmo corte do Ranking de zonas,
+  // pra não virar um eixo X ilegível quando o recorte cobre o estado inteiro.
+  // Seleciona esse top 15 por total decrescente, mas exibe crescente (menor
+  // pra maior, esquerda pra direita) — é o sentido de leitura do gráfico.
+  const porMunicipio = useMemo<LinhaMunicipio[]>(() => {
+    const somas = new Map<string, number[]>()
+    for (const l of linhas) {
+      const atual = somas.get(l.NM_MUNICIPIO) ?? ativos.map(() => 0)
+      l.VOTOS.forEach((v, i) => { atual[i] = (atual[i] ?? 0) + v })
+      somas.set(l.NM_MUNICIPIO, atual)
+    }
+    return [...somas.entries()]
+      .map(([municipio, votos]) => {
+        const linha: LinhaMunicipio = { municipio, total: votos.reduce((s, v) => s + v, 0) }
+        ativos.forEach((d, i) => { linha[d.slot] = votos[i] })
+        return linha
+      })
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 15)
+      .reverse()
+  }, [linhas, ativos])
   const geoPontos = useMemo(
     () => linhas.filter((l): l is LinhaCruzamento & { LAT: number; LON: number } => l.LAT !== null && l.LON !== null),
     [linhas],
@@ -423,6 +481,66 @@ export function Cruzamento({
                 {formataInteiro(linhas.length - geoPontos.length)} locais sem coordenada ficam fora do
                 mapa, mas seguem na tabela abaixo.
               </p>
+            )}
+          </div>
+
+          <div className="rounded-xl border borda bg-superficie p-4">
+            <h3 className="text-sm font-semibold text-tinta">Votos por município</h3>
+            <p className="mt-1 text-xs text-tinta-3">
+              Os 15 municípios com mais voto somado entre os candidatos ativos.
+            </p>
+            <div className="mt-3" style={{ height: 320 }}>
+              {carregando ? (
+                <div className="grid h-full place-items-center">
+                  <p className="text-sm text-tinta-3">Carregando…</p>
+                </div>
+              ) : !porMunicipio.length ? (
+                <div className="grid h-full place-items-center">
+                  <p className="text-sm text-tinta-3">Nada encontrado com esses filtros.</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={porMunicipio} margin={{ top: 8, right: 12, bottom: 56, left: 4 }}>
+                    <CartesianGrid stroke={t.grade} vertical={false} />
+                    <XAxis
+                      dataKey="municipio"
+                      tickLine={false}
+                      axisLine={{ stroke: t.eixo }}
+                      tick={{ fill: t.suave, fontSize: 11 }}
+                      angle={-40}
+                      textAnchor="end"
+                      interval={0}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      width={44}
+                      tick={{ fill: t.suave, fontSize: 12 }}
+                      tickFormatter={(v: number) => formataCompacto(v)}
+                    />
+                    <TooltipGrafico
+                      content={(props) => <DicaMunicipio {...props} ativos={ativos} coresPorSlot={coresPorSlot} />}
+                      cursor={{ stroke: t.eixo }}
+                    />
+                    {ativos.map((d) => (
+                      <Line
+                        key={d.slot} dataKey={d.slot} stroke={coresPorSlot[d.slot]}
+                        strokeWidth={2} strokeLinecap="round" dot={false} activeDot={{ r: 4 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            {n >= 2 && (
+              <ul className="mt-3 flex flex-wrap gap-4 text-sm text-tinta-2">
+                {ativos.map((d) => (
+                  <li key={d.slot} className="flex items-center gap-2">
+                    <span aria-hidden className="size-2.5 rounded-full" style={{ background: coresPorSlot[d.slot] }} />
+                    {d.slot} · {d.nome}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 
