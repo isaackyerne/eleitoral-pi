@@ -1,11 +1,11 @@
 """
-Consolida os dados eleitorais municipais do Piauí de 2020 (TSE) em um único CSV analítico.
+Consolida os dados eleitorais municipais da Bahia de 2020 (TSE) em um único CSV analítico.
 
 Fontes (dados/2020/):
-  - votacao_secao_2020_PI.csv        : votos por seção x cargo x votável
-  - eleitorado_local_votacao_2020.csv: cadastro de seções/locais (nacional, filtrado para PI)
+  - votacao_secao_2020_BA.csv        : votos por seção x cargo x votável
+  - eleitorado_local_votacao_2020.csv: cadastro de seções/locais (nacional, filtrado para BA)
 
-Saída: dados/processados/eleicoes_pi_2020.csv
+Saída: dados/processados/eleicoes_ba_2020.csv
 Granularidade: eleição x turno x local de votação x cargo x votável.
 
 Diferenças relevantes em relação a 2018 (ver consolida_2018.py):
@@ -33,7 +33,7 @@ from eleitoral import esquema  # noqa: E402
 BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dados')
 BRUTO = os.path.join(BASE, '2020')
 SAIDA_DIR = os.path.join(BASE, 'processados')
-SAIDA = os.path.join(SAIDA_DIR, 'eleicoes_pi_2020.csv')
+SAIDA = os.path.join(SAIDA_DIR, 'eleicoes_ba_2020.csv')
 
 CHAVE_SECAO = ['NR_TURNO', 'CD_MUNICIPIO', 'NR_ZONA', 'NR_SECAO']
 CHAVE_LOCAL = ['NR_TURNO', 'CD_MUNICIPIO', 'NR_ZONA', 'NR_LOCAL_VOTACAO']
@@ -50,7 +50,7 @@ PARTIDOS_EXTRA = {
 
 def carrega_votacao():
     df = pd.read_csv(
-        os.path.join(BRUTO, 'votacao_secao_2020_PI.csv'),
+        os.path.join(BRUTO, 'votacao_secao_2020_BA.csv'),
         sep=';', encoding='latin1', quotechar='"', dtype=str,
         na_values=esquema.NA_TSE,
     )
@@ -59,7 +59,7 @@ def carrega_votacao():
 
 
 def carrega_eleitorado():
-    """Lê o arquivo nacional em blocos, mantendo apenas o PI."""
+    """Lê o arquivo nacional em blocos, mantendo apenas o BA."""
     partes = []
     leitor = pd.read_csv(
         os.path.join(BRUTO, 'eleitorado_local_votacao_2020.csv'),
@@ -67,7 +67,7 @@ def carrega_eleitorado():
         na_values=esquema.NA_TSE, chunksize=200_000,
     )
     for bloco in leitor:
-        partes.append(bloco[bloco['SG_UF'] == 'PI'])
+        partes.append(bloco[bloco['SG_UF'] == 'BA'])
     df = pd.concat(partes, ignore_index=True)
     for c in ['QT_ELEITOR_SECAO', 'QT_ELEITOR_ELEICAO_MUNICIPAL']:
         df[c] = pd.to_numeric(df[c])
@@ -109,7 +109,7 @@ def cadastro_locais(pr):
     """
     lat = pd.to_numeric(pr['NR_LATITUDE'], errors='coerce')
     lon = pd.to_numeric(pr['NR_LONGITUDE'], errors='coerce')
-    valido = lat.between(-11.5, -2.5) & lon.between(-46.5, -40.0)
+    valido = lat.between(-19.0, -8.0) & lon.between(-47.0, -37.0)
     pr = pr.assign(LATITUDE=lat.where(valido), LONGITUDE=lon.where(valido))
 
     vazio = ['-1', '0', '00000000', '000000000']
@@ -152,6 +152,11 @@ def classifica_voto(cargo, nr_votavel):
         return 'Branco'
     if nr_votavel == '96':
         return 'Nulo'
+    # 97 é código reservado do TSE pra "voto anulado e apurado em separado"
+    # (achado em Salvador/2018) — não é número de partido, mesmo em cargo
+    # proporcional.
+    if nr_votavel == '97':
+        return 'Nulo'
     # Voto de legenda existe só no cargo proporcional. Em Prefeito o número do
     # candidato também tem 2 dígitos, por isso o cargo precisa entrar na regra.
     if cargo == 'Vereador' and len(nr_votavel) == 2:
@@ -162,7 +167,7 @@ def classifica_voto(cargo, nr_votavel):
 def main():
     print('lendo votação...')
     vt = carrega_votacao()
-    print('lendo eleitorado (filtrando PI)...')
+    print('lendo eleitorado (filtrando BA)...')
     el = carrega_eleitorado()
 
     pr = aptos_por_secao(el)
@@ -232,7 +237,7 @@ def main():
         df['QT_APTOS'] > 0, (df['QT_ABSTENCAO'] / df['QT_APTOS'] * 100).round(4), np.nan)
 
     df['ANO_ELEICAO'] = 2020
-    df['SG_UF'] = 'PI'
+    df['SG_UF'] = 'BA'
     df['DT_ELEICAO'] = pd.to_datetime(df['DT_ELEICAO'], format='%d/%m/%Y').dt.strftime('%Y-%m-%d')
     df['ID_LOCAL'] = df['CD_MUNICIPIO'] + '-' + df['NR_ZONA'] + '-' + df['NR_LOCAL_VOTACAO']
 

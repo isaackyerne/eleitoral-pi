@@ -18,6 +18,9 @@ dados/processados/*.csv
 # Arquivos de candidatura e resultado baixados do TSE (~1,3 GB)
 dados/brutos_tse/
 
+# Bruto do perfil do eleitorado (grão por seção x combinação demográfica, ~1,7 GB)
+dados/perfil_eleitorado/
+
 # A base unificada (dados/processados/unificado/*.parquet) NÃO é ignorada:
 # são 5,5 MB e é o entregável que o dashboard consome.
 

@@ -9,8 +9,15 @@ import * as duckdb from '@duckdb/duckdb-wasm'
  * de verdade em vez de manipular arrays no cliente.
  */
 
+// `fato_oficial_munzona` fica fora: na Bahia os arquivos oficiais de
+// anulação/totais do TSE que o alimentam não existem em nenhum dos 4 anos
+// (ver `scripts/eleitoral/votaveis.py`), e nenhuma consulta do painel o lê —
+// ele só serve à conferência em `scripts/eleitoral/validacao.py`, do lado
+// Python. Listá-lo aqui faria o carregamento inteiro falhar por um parquet
+// que nunca vai existir.
 const TABELAS = [
-  'fato_votos', 'fato_local_cargo', 'fato_local', 'fato_oficial_munzona',
+  'fato_votos', 'fato_local_cargo', 'fato_local',
+  'fato_perfil_eleitorado',
   'dim_eleicao', 'dim_eleicao_cargo', 'dim_cargo', 'dim_municipio',
   'dim_local', 'dim_local_atual', 'dim_partido', 'dim_partido_ano',
   'dim_votavel', 'dim_politico',

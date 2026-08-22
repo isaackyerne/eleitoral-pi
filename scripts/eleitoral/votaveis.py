@@ -37,7 +37,7 @@ def carrega_candidaturas():
     """
     partes = []
     for ano in esquema.ANOS:
-        caminho = os.path.join(esquema.DIR_BRUTOS_TSE, f'consulta_cand_{ano}_PI.csv')
+        caminho = os.path.join(esquema.DIR_BRUTOS_TSE, f'consulta_cand_{ano}_BA.csv')
         c = pd.read_csv(caminho, sep=';', encoding='latin1', dtype=str, quotechar='"',
                         na_values=esquema.NA_TSE, usecols=_COLS_CAND)
         c['ANO_ELEICAO'] = ano
@@ -81,7 +81,7 @@ def destinacao_oficial():
     valido, lista_anulacao = {}, {}
     for ano in esquema.ANOS:
         caminho = os.path.join(esquema.DIR_BRUTOS_TSE,
-                               f'votacao_candidato_munzona_{ano}_PI.csv')
+                               f'votacao_candidato_munzona_{ano}_BA.csv')
         if not os.path.exists(caminho):
             continue
         v = pd.read_csv(caminho, sep=';', encoding='latin1', dtype=str, quotechar='"',
@@ -118,7 +118,7 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     cand_por_sq = cand.drop_duplicates('SQ_CANDIDATO').set_index('SQ_CANDIDATO')
     cand_por_nr = cand.drop_duplicates(['ANO_ELEICAO', 'NR_TURNO', 'UE', 'CD_CARGO', 'NR_CANDIDATO'])
 
-    v['UE'] = v['CD_MUNICIPIO_UE'].astype(str).where(v['TP_ESFERA'] == 'Municipal', 'PI')
+    v['UE'] = v['CD_MUNICIPIO_UE'].astype(str).where(v['TP_ESFERA'] == 'Municipal', 'BA')
     por_sq = v['SQ_CANDIDATO'].map(cand_por_sq['NR_TITULO_ELEITORAL_CANDIDATO'])
 
     m = v.merge(
@@ -184,7 +184,7 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
 
     # Se o voto entrou nos válidos oficiais — é isto, e não a situação do
     # registro, que reproduz os percentuais publicados pelo TSE.
-    dest, _ = destinacao_oficial()
+    dest, anos_com_arquivo = destinacao_oficial()
     m['FL_VOTO_VALIDO'] = m['SQ_CANDIDATO'].map(dest).where(nominal).astype('boolean')
     # Candidatura que não consta do arquivo oficial de votação é tratada como
     # anulada. Vale para a maioria dos casos (Elizeu Aguiar em 2018, Diego Melo
@@ -192,7 +192,13 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     # terem sido anuladas — daí o resíduo de ~0,3% documentado no dicionário.
     # Nenhum campo publicado distingue os dois casos; para o número oficial
     # exato use fato_oficial_munzona.
-    m.loc[nominal & m['FL_VOTO_VALIDO'].isna(), 'FL_VOTO_VALIDO'] = False
+    #
+    # Essa regra só vale nos anos em que o arquivo de fato existe. Sem ele
+    # (caso da Bahia, nenhum dos 4 anos) a ausência não significa nada — fica
+    # nulo (desconhecido), não False, senão marcaria 100% dos votos nominais
+    # como inválidos em vez do ~0,3% que a regra tolera quando o arquivo existe.
+    tem_arquivo = m['ANO_ELEICAO'].isin(set(anos_com_arquivo))
+    m.loc[nominal & tem_arquivo & m['FL_VOTO_VALIDO'].isna(), 'FL_VOTO_VALIDO'] = False
 
     m['FL_ELEITO'] = m['DS_SIT_TOT_TURNO'].str.upper().str.startswith('ELEITO')
     m['FL_ELEITO'] = m['FL_ELEITO'].where(nominal, pd.NA).astype('boolean')

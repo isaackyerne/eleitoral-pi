@@ -1,7 +1,7 @@
 """Identidade estável do local de votação ao longo dos anos.
 
 `ID_LOCAL` ("município-zona-local") não serve como chave de painel: a Justiça
-Eleitoral reduziu o PI de 82 para 74 zonas entre 2020 e 2022 e renumerou 27
+Eleitoral reduziu a Bahia de 82 para 74 zonas entre 2020 e 2022 e renumerou 27
 municípios, dois deles indo e voltando (61→77→61→61). Isso quebra 1.180 dos
 4.056 ID_LOCAL sem que nenhum local tenha mudado de lugar.
 

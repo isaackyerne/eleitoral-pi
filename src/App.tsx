@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   conferenciaMunicipio, doisMaisVotadosPorLocal, kpis, mapaLocais, mapaMunicipios, opcoes,
-  participacao, tabela, topPorLocal, topVotaveis, votosPorPartidoAno,
-  type DoisMaisVotados, type LocalMapa, type MunicipioMapa, type TopLocalCandidato,
+  participacao, perfilEleitorado, tabela, topPorLocal, topVotaveis, votosPorPartidoAno,
+  type DoisMaisVotados, type LocalMapa, type MunicipioMapa, type PerfilLinha, type TopLocalCandidato,
   type Granularidade, type Kpis as DadosKpis, type LinhaConferencia, type LinhaTabela,
   type OpcaoCargo, type OpcaoEleicao, type OpcaoMunicipio, type OpcaoPartido, type OpcaoTurno,
   type Participacao as DadoParticipacao, type VotavelTop, type VotoPartido,
@@ -17,6 +17,7 @@ import { Filtros } from './paineis/Filtros'
 import { Kpis } from './paineis/Kpis'
 import { Mapa } from './paineis/Mapa'
 import { Participacao } from './paineis/Participacao'
+import { PerfilEleitorado } from './paineis/PerfilEleitorado'
 import { RankingPartidos } from './paineis/RankingPartidos'
 import { RankingZonas } from './paineis/RankingZonas'
 import { Tabela } from './paineis/Tabela'
@@ -61,6 +62,7 @@ export default function App() {
     conferencia: LinhaConferencia[]
     doisGovernador: DoisMaisVotados
     topLocais: TopLocalCandidato[]
+    perfil: PerfilLinha[]
   }
   const [carga, setCarga] = useState<Carga | null>(null)
   const pedido = `${chave}|${grao}`
@@ -111,13 +113,14 @@ export default function App() {
       mapaMunicipios(recorte), mapaLocais(recorte), conferenciaMunicipio(recorte),
       ehGovernador ? doisMaisVotadosPorLocal(recorte) : Promise.resolve({ candidatos: [], locais: [] }),
       topPorLocal(recorte),
+      perfilEleitorado(recorte.cdMunicipio),
     ])
-      .then(([k, p, t, pa, tb, zn, mu, lo, cf, dg, tl]) => {
+      .then(([k, p, t, pa, tb, zn, mu, lo, cf, dg, tl, pf]) => {
         if (!vivo) return
         setCarga({
           de: pedido, kpis: k[0] ?? null, participacao: p, top: t,
           partidos: pa, linhas: tb, zonas: zn, municipios: mu, locais: lo, conferencia: cf,
-          doisGovernador: dg, topLocais: tl,
+          doisGovernador: dg, topLocais: tl, perfil: pf,
         })
       })
       .catch((e: unknown) => {
@@ -139,6 +142,9 @@ export default function App() {
   const conferencia = carga?.conferencia ?? VAZIO
   const doisGovernador = carga?.doisGovernador ?? null
   const topLocais = carga?.topLocais ?? VAZIO
+  const dadosPerfil = carga?.perfil ?? VAZIO
+  const nomeMunicipioAtual =
+    listas?.municipios.find((m) => m.CD_MUNICIPIO === recorte.cdMunicipio)?.NM_MUNICIPIO ?? null
 
   // Slot de cor por partido, do total da série inteira — é o que faz a cor
   // seguir o partido em vez da posição no ranking de cada recorte.
@@ -236,6 +242,10 @@ export default function App() {
               dados={dadosPartidos} ano={ano} anos={anos}
               aoTrocarAno={setAnoEscolhido} slots={slots}
             />
+          )}
+
+          {secao === 'perfil' && (
+            <PerfilEleitorado dados={dadosPerfil} nomeMunicipio={nomeMunicipioAtual} />
           )}
 
           {secao === 'cruzamento' && listas && (

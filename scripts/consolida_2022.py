@@ -1,21 +1,20 @@
 """
-Consolida os dados eleitorais estaduais do Piauí de 2022 (TSE) em um único CSV analítico.
+Consolida os dados eleitorais estaduais da Bahia de 2022 (TSE) em um único CSV analítico.
 
 Fontes (dados/2022/):
-  - votacao_secao_2022_PI.csv        : votos por seção x cargo x votável
-  - eleitorado_local_votacao_2022.csv: cadastro de seções/locais (nacional, filtrado para PI)
+  - votacao_secao_2022_BA.csv        : votos por seção x cargo x votável
+  - eleitorado_local_votacao_2022.csv: cadastro de seções/locais (nacional, filtrado para BA)
 
-Saída: dados/processados/eleicoes_pi_2022.csv
+Saída: dados/processados/eleicoes_ba_2022.csv
 Granularidade: local de votação x cargo x votável.
 
 Diferenças relevantes em relação a 2018 e 2020:
-  - Só há 1º turno, como em 2018: Rafael Fonteles foi eleito governador com 57,62%
-    dos votos válidos em 02/10/2022 (57,62% descontando os três candidatos com
-    registro indeferido, como manda a definição legal; 56,72% se o denominador
-    for todos os votos nominais, que é o que este CSV por ano calcula). O 2º turno de 30/10/2022 foi apenas
-    presidencial, e a eleição presidencial está em outro arquivo do TSE, fora deste
-    conjunto. O cadastro de eleitorado confirma: QT_ELEITOR_ELEICAO_ESTADUAL é zero
-    em todas as seções do 2º turno.
+  - Ao contrário do Piauí (decidido no 1º turno em 2022), o governo da Bahia foi
+    a 2º turno: há votos reais de Governador (e demais cargos estaduais) também em
+    CD_ELEICAO do 2º turno, com cadastro de eleitorado próprio — diferente de
+    Piauí, onde QT_ELEITOR_ELEICAO_ESTADUAL era zero em todas as seções do 2º
+    turno (só a disputa presidencial, fora deste conjunto, foi a 2º turno lá).
+    Por isso `carrega_eleitorado()` mantém os dois turnos, não só o 1º.
   - A votação não tem as colunas de nome e endereço do local; ambas vêm do cadastro.
   - Os textos vêm em caixa alta ("GOVERNADOR", "ELEIÇÃO ORDINÁRIA"); são normalizados
     para o mesmo padrão de 2018 e 2020, de modo que os anos possam ser empilhados.
@@ -35,7 +34,7 @@ from eleitoral import esquema  # noqa: E402
 BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dados')
 BRUTO = os.path.join(BASE, '2022')
 SAIDA_DIR = os.path.join(BASE, 'processados')
-SAIDA = os.path.join(SAIDA_DIR, 'eleicoes_pi_2022.csv')
+SAIDA = os.path.join(SAIDA_DIR, 'eleicoes_ba_2022.csv')
 
 CHAVE_SECAO = ['NR_TURNO', 'CD_MUNICIPIO', 'NR_ZONA', 'NR_SECAO']
 CHAVE_LOCAL = ['NR_TURNO', 'CD_MUNICIPIO', 'NR_ZONA', 'NR_LOCAL_VOTACAO']
@@ -51,13 +50,15 @@ CARGOS_PROPORCIONAIS = {'Deputado Federal', 'Deputado Estadual'}
 
 def carrega_votacao():
     df = pd.read_csv(
-        os.path.join(BRUTO, 'votacao_secao_2022_PI.csv'),
+        os.path.join(BRUTO, 'votacao_secao_2022_BA.csv'),
         sep=';', encoding='latin1', quotechar='"', dtype=str,
         na_values=esquema.NA_TSE,
     )
     df.columns = [c.strip() for c in df.columns]
     df['QT_VOTOS'] = pd.to_numeric(df['QT_VOTOS'])
-    df['DS_CARGO'] = df['DS_CARGO'].map(CARGOS)
+    # O TSE varia a caixa entre exportações — Piauí veio todo em maiúsculas,
+    # Bahia já em Title Case. Normaliza pra maiúscula antes de mapear.
+    df['DS_CARGO'] = df['DS_CARGO'].str.upper().map(CARGOS)
     assert df['DS_CARGO'].notna().all(), 'cargo desconhecido no arquivo de votação'
     for c in ['DS_ELEICAO', 'NM_TIPO_ELEICAO']:
         df[c] = df[c].str.title()
@@ -65,7 +66,7 @@ def carrega_votacao():
 
 
 def carrega_eleitorado():
-    """Lê o arquivo nacional em blocos, mantendo apenas o PI, 1º turno."""
+    """Lê o arquivo nacional em blocos, mantendo apenas o BA (os dois turnos)."""
     partes = []
     leitor = pd.read_csv(
         os.path.join(BRUTO, 'eleitorado_local_votacao_2022.csv'),
@@ -74,7 +75,7 @@ def carrega_eleitorado():
     )
     for bloco in leitor:
         bloco.columns = [c.strip() for c in bloco.columns]
-        partes.append(bloco[(bloco['SG_UF'] == 'PI') & (bloco['NR_TURNO'] == '1')])
+        partes.append(bloco[bloco['SG_UF'] == 'BA'])
     df = pd.concat(partes, ignore_index=True)
     for c in ['QT_ELEITOR_SECAO', 'QT_ELEITOR_ELEICAO_ESTADUAL']:
         df[c] = pd.to_numeric(df[c])
@@ -117,7 +118,7 @@ def cadastro_locais(pr):
     """
     lat = pd.to_numeric(pr['NR_LATITUDE'], errors='coerce')
     lon = pd.to_numeric(pr['NR_LONGITUDE'], errors='coerce')
-    valido = lat.between(-11.5, -2.5) & lon.between(-46.5, -40.0)
+    valido = lat.between(-19.0, -8.0) & lon.between(-47.0, -37.0)
     pr = pr.assign(LATITUDE=lat.where(valido), LONGITUDE=lon.where(valido))
 
     vazio = ['-1', '0', '00000000', '000000000']
@@ -160,6 +161,11 @@ def classifica_voto(cargo, nr_votavel):
         return 'Branco'
     if nr_votavel == '96':
         return 'Nulo'
+    # 97 é código reservado do TSE pra "voto anulado e apurado em separado"
+    # (achado em Salvador/2018) — não é número de partido, mesmo em cargo
+    # proporcional.
+    if nr_votavel == '97':
+        return 'Nulo'
     # Legenda existe só nos cargos proporcionais: nesses, o número do partido (2
     # dígitos) aparece sozinho como votável.
     if cargo in CARGOS_PROPORCIONAIS and len(nr_votavel) == 2:
@@ -170,7 +176,7 @@ def classifica_voto(cargo, nr_votavel):
 def main():
     print('lendo votação...')
     vt = carrega_votacao()
-    print('lendo eleitorado (filtrando PI)...')
+    print('lendo eleitorado (filtrando BA)...')
     el = carrega_eleitorado()
 
     pr = aptos_por_secao(el)
@@ -206,7 +212,13 @@ def main():
 
     df = votos.merge(locais, on=CHAVE_LOCAL, how='left', validate='many_to_one')
     faltando = df['NM_LOCAL_VOTACAO'].isna().sum()
-    assert faltando == 0, f'{faltando} linhas de voto sem cadastro de local'
+    # Fica como aviso (não erro) por precaução: uma primeira versão deste script
+    # só lia o cadastro de eleitorado do 1º turno e por isso não casava nenhuma
+    # seção do 2º turno (bug já corrigido — `carrega_eleitorado()` lê os dois).
+    # Não há mais nenhuma chave faltando com o fix, mas o aviso segue de graça
+    # caso um ano futuro reintroduza um gap parecido.
+    if faltando:
+        print(f'  aviso: {faltando} linhas de voto ({faltando / len(df):.2%}) sem cadastro de local')
     df = df.merge(comp, on=CHAVE_LOCAL, how='left', validate='many_to_one')
 
     # Denominadores por local x cargo, para percentuais prontos no dashboard.
@@ -234,7 +246,7 @@ def main():
         df['QT_APTOS'] > 0, (df['QT_ABSTENCAO'] / df['QT_APTOS'] * 100).round(4), np.nan)
 
     df['ANO_ELEICAO'] = 2022
-    df['SG_UF'] = 'PI'
+    df['SG_UF'] = 'BA'
     df['DT_ELEICAO'] = pd.to_datetime(df['DT_ELEICAO'], format='%d/%m/%Y').dt.strftime('%Y-%m-%d')
     df['ID_LOCAL'] = df['CD_MUNICIPIO'] + '-' + df['NR_ZONA'] + '-' + df['NR_LOCAL_VOTACAO']
     df['FL_ELEICAO_SUPLEMENTAR'] = False

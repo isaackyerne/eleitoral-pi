@@ -124,7 +124,7 @@ for ano in [2018, 2020, 2022, 2024]:
                                    int(sec['QT_ABSTENCOES'].sum()))
     else:
         el = le(ano, 'eleitorado_local_votacao')
-        el = el[(el['SG_UF'] == 'PI') & (el['NR_TURNO'] == '1')]
+        el = el[(el['SG_UF'] == 'BA') & (el['NR_TURNO'] == '1')]
         campo = 'QT_ELEITOR_ELEICAO_MUNICIPAL' if ano == 2020 else 'QT_ELEITOR_ELEICAO_ESTADUAL'
         for c in [campo, 'QT_ELEITOR_SECAO']:
             el[c] = pd.to_numeric(el[c])

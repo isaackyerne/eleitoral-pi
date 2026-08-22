@@ -36,9 +36,9 @@ CARGOS_PROPORCIONAIS = {'Deputado Federal', 'Deputado Estadual', 'Vereador'}
 # então o total de votos do cargo em 2018 é o dobro do comparecimento.
 VAGAS = {
     (2018, 'Governador'): 1, (2018, 'Senador'): 2,
-    (2018, 'Deputado Federal'): 10, (2018, 'Deputado Estadual'): 30,
+    (2018, 'Deputado Federal'): 39, (2018, 'Deputado Estadual'): 63,
     (2022, 'Governador'): 1, (2022, 'Senador'): 1,
-    (2022, 'Deputado Federal'): 10, (2022, 'Deputado Estadual'): 30,
+    (2022, 'Deputado Federal'): 39, (2022, 'Deputado Estadual'): 63,
 }
 # Quantos votos cada eleitor deposita naquele cargo.
 VOTOS_POR_ELEITOR = {(2018, 'Senador'): 2}
@@ -63,7 +63,11 @@ BRONZE_COLUNAS = [
     'FL_APTOS_ESTIMADO', 'FL_LOCAL_REMANEJADO', 'FL_ELEICAO_SUPLEMENTAR',
 ]
 
-# 2024 vem do Boletim de Urna, que traz duas informações a mais.
+# No Piauí, 2024 vinha do Boletim de Urna, que trazia duas informações a
+# mais nativamente. Na Bahia os 4 anos usam a mesma fonte (votacao_secao),
+# então nenhum ano tem essas colunas — ficam como nulo em todos, preenchidas
+# por carrega_bronze() (ver bronze_colunas() logo abaixo: não são mais
+# obrigatórias em nenhum ano, só o esquema continua com o nome pronto).
 BRONZE_EXTRAS_2024 = ['SG_PARTIDO', 'QT_ELEITOR_BIOM_SEM_HABILITACAO']
 
 # Colunas que precisam ser lidas como texto para não perder zero à esquerda.
@@ -74,7 +78,9 @@ BRONZE_DTYPES_LEITURA = {
 
 
 def bronze_colunas(ano):
-    return BRONZE_COLUNAS + (BRONZE_EXTRAS_2024 if ano == 2024 else [])
+    # BRONZE_EXTRAS_2024 não entra aqui: nenhum ano da Bahia as traz de
+    # verdade, e carrega_bronze() já preenche como nulo o que faltar.
+    return BRONZE_COLUNAS
 
 
 # ---------------------------------------------------------------------------

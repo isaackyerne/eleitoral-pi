@@ -13,8 +13,8 @@ import pandas as pd
 # lugar do CPF nos arquivos de candidatura a partir de 2024.
 VAZIOS = ['-1', '-3', '-4', '0', '00000000', '000000000']
 
-# Caixa delimitadora do Piauí, para descartar coordenada fora do estado.
-BBOX_PI = {'lat': (-11.5, -2.5), 'lon': (-46.5, -40.0)}
+# Caixa delimitadora da Bahia, para descartar coordenada fora do estado.
+BBOX_BA = {'lat': (-19.0, -8.0), 'lon': (-47.0, -37.0)}
 
 # Palavras que ficam em minúscula no meio de um nome próprio em pt-BR.
 _MINUSCULAS = {'de', 'da', 'do', 'das', 'dos', 'e', 'du', 'del', 'em', 'a'}
@@ -75,14 +75,14 @@ def limpa_sentinela(s, extras=()):
 
 
 def coordenada(serie_lat, serie_lon):
-    """Converte para float e anula o que cai fora do Piauí.
+    """Converte para float e anula o que cai fora da Bahia.
 
     O TSE usa -1 como ausência de coordenada; o bbox descarta também eventuais
     geocodificações erradas que caem em outro estado.
     """
     lat = pd.to_numeric(serie_lat, errors='coerce')
     lon = pd.to_numeric(serie_lon, errors='coerce')
-    ok = lat.between(*BBOX_PI['lat']) & lon.between(*BBOX_PI['lon'])
+    ok = lat.between(*BBOX_BA['lat']) & lon.between(*BBOX_BA['lon'])
     return lat.where(ok), lon.where(ok)
 
 

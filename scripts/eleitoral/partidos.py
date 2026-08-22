@@ -5,7 +5,7 @@ até 2022 e virou Podemos em 2024; 25 era DEM e virou PRD; 44 era PRP e virou
 União Brasil. Agrupar por `NR_PARTIDO` funde partidos diferentes em silêncio.
 
 A identidade estável é a **sigla canônica** — obtida aplicando o mapa de
-renomeações de `referencia/partidos_pi.csv` sobre a sigla oficial que o
+renomeações de `referencia/partidos_ba.csv` sobre a sigla oficial que o
 `consulta_cand` traz para cada ano. O crosswalk (ano, número) → SK_PARTIDO cai
 fora disso automaticamente.
 """
@@ -26,7 +26,7 @@ def _sigla_oficial_por_ano():
     """
     partes = []
     for ano in esquema.ANOS:
-        caminho = os.path.join(esquema.DIR_BRUTOS_TSE, f'consulta_cand_{ano}_PI.csv')
+        caminho = os.path.join(esquema.DIR_BRUTOS_TSE, f'consulta_cand_{ano}_BA.csv')
         c = pd.read_csv(caminho, sep=';', encoding='latin1', dtype=str,
                         quotechar='"', na_values=esquema.NA_TSE,
                         usecols=['NR_PARTIDO', 'SG_PARTIDO', 'NM_PARTIDO'])
@@ -55,8 +55,9 @@ def _completa_sem_candidato(observado, vistos, ref):
 
     Um partido pode não lançar candidato num ano e ainda assim receber voto de
     legenda — foi o caso do PSDB no Piauí em 2022, com 1.033 votos para Deputado
-    Federal. Como ele não aparece no `consulta_cand` daquele ano, o número
-    ficaria sem partido e o votável sem nome.
+    Federal (mesmo padrão pode aparecer aqui na Bahia com outro partido). Como
+    ele não aparece no `consulta_cand` daquele ano, o número ficaria sem
+    partido e o votável sem nome.
 
     A resolução usa o mesmo número nos demais anos, e só é aceita quando aponta
     para uma entidade única — se o número tiver trocado de dono no período, é
@@ -83,7 +84,7 @@ def resolver(numeros_vistos=None):
     `numeros_vistos` é o conjunto de pares (ano, número) que aparecem na votação;
     serve para cobrir partidos que receberam voto sem ter candidato no ano.
     """
-    ref = pd.read_csv(os.path.join(esquema.DIR_REFERENCIA, 'partidos_pi.csv'), dtype=str)
+    ref = pd.read_csv(os.path.join(esquema.DIR_REFERENCIA, 'partidos_ba.csv'), dtype=str)
     ref['NR_PARTIDO_ATUAL'] = pd.to_numeric(ref['NR_PARTIDO_ATUAL'])
 
     # SK atribuído pela ordem alfabética da sigla, nunca por ordem de encontro,
@@ -95,7 +96,7 @@ def resolver(numeros_vistos=None):
     canonico = _mapa_canonico(ref)
 
     faltando = sorted(set(observado['SG_PARTIDO']) - set(canonico))
-    assert not faltando, f'siglas vistas nos dados e ausentes de partidos_pi.csv: {faltando}'
+    assert not faltando, f'siglas vistas nos dados e ausentes de partidos_ba.csv: {faltando}'
 
     observado['SG_CANONICA'] = observado['SG_PARTIDO'].map(canonico)
     observado = observado.merge(

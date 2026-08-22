@@ -1,11 +1,11 @@
 """
-Consolida os dados eleitorais do Piauí de 2018 (TSE) em um único CSV analítico.
+Consolida os dados eleitorais da Bahia de 2018 (TSE) em um único CSV analítico.
 
 Fontes (dados/2018/):
-  - votacao_secao_2018_PI.csv        : votos por seção x cargo x votável (1º turno, PI)
-  - eleitorado_local_votacao_2018.csv: cadastro de seções/locais (nacional, filtrado para PI)
+  - votacao_secao_2018_BA.csv        : votos por seção x cargo x votável (1º turno, BA)
+  - eleitorado_local_votacao_2018.csv: cadastro de seções/locais (nacional, filtrado para BA)
 
-Saída: dados/processados/eleicoes_pi_2018.csv
+Saída: dados/processados/eleicoes_ba_2018.csv
 Granularidade: local de votação x cargo x votável.
 """
 
@@ -21,7 +21,7 @@ from eleitoral import esquema  # noqa: E402
 BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dados')
 BRUTO = os.path.join(BASE, '2018')
 SAIDA_DIR = os.path.join(BASE, 'processados')
-SAIDA = os.path.join(SAIDA_DIR, 'eleicoes_pi_2018.csv')
+SAIDA = os.path.join(SAIDA_DIR, 'eleicoes_ba_2018.csv')
 
 CHAVE_SECAO = ['CD_MUNICIPIO', 'NR_ZONA', 'NR_SECAO']
 CHAVE_LOCAL = ['CD_MUNICIPIO', 'NR_ZONA', 'NR_LOCAL_VOTACAO']
@@ -36,7 +36,7 @@ CHAVE_LOCAL = ['CD_MUNICIPIO', 'NR_ZONA', 'NR_LOCAL_VOTACAO']
 
 def carrega_votacao():
     df = pd.read_csv(
-        os.path.join(BRUTO, 'votacao_secao_2018_PI.csv'),
+        os.path.join(BRUTO, 'votacao_secao_2018_BA.csv'),
         sep=';', encoding='latin1', quotechar='"', dtype=str,
         na_values=esquema.NA_TSE,
     )
@@ -45,7 +45,7 @@ def carrega_votacao():
 
 
 def carrega_eleitorado():
-    """Lê o arquivo nacional em blocos, mantendo apenas o PI, 1º turno."""
+    """Lê o arquivo nacional em blocos, mantendo apenas o BA, 1º turno."""
     partes = []
     leitor = pd.read_csv(
         os.path.join(BRUTO, 'eleitorado_local_votacao_2018.csv'),
@@ -53,7 +53,7 @@ def carrega_eleitorado():
         na_values=esquema.NA_TSE, chunksize=200_000,
     )
     for bloco in leitor:
-        partes.append(bloco[(bloco['SG_UF'] == 'PI') & (bloco['NR_TURNO'] == '1')])
+        partes.append(bloco[(bloco['SG_UF'] == 'BA') & (bloco['NR_TURNO'] == '1')])
     df = pd.concat(partes, ignore_index=True)
     for c in ['QT_ELEITOR_SECAO', 'QT_ELEITOR_ELEICAO_ESTADUAL']:
         df[c] = pd.to_numeric(df[c])
@@ -90,8 +90,8 @@ def cadastro_locais(pr):
     """Colapsa as seções principais em uma linha por local de votação de 2018."""
     lat = pd.to_numeric(pr['NR_LATITUDE'], errors='coerce')
     lon = pd.to_numeric(pr['NR_LONGITUDE'], errors='coerce')
-    # -1 é sentinela do TSE para coordenada ausente; o bbox descarta pontos fora do PI
-    valido = lat.between(-11.5, -2.5) & lon.between(-46.5, -40.0)
+    # -1 é sentinela do TSE para coordenada ausente; o bbox descarta pontos fora do BA
+    valido = lat.between(-19.0, -8.0) & lon.between(-47.0, -37.0)
     pr = pr.assign(LATITUDE=lat.where(valido), LONGITUDE=lon.where(valido))
 
     vazio = ['-1', '0', '00000000', '000000000']
@@ -135,6 +135,11 @@ def classifica_voto(cargo, nr_votavel):
         return 'Branco'
     if nr_votavel == '96':
         return 'Nulo'
+    # 97 é código reservado do TSE pra "voto anulado e apurado em separado"
+    # (achado em Salvador/2018) — não é número de partido, mesmo em cargo
+    # proporcional.
+    if nr_votavel == '97':
+        return 'Nulo'
     # Legenda existe só nos cargos proporcionais: nesses, o número do partido (2
     # dígitos) aparece sozinho como votável.
     if cargo in ('Deputado Federal', 'Deputado Estadual') and len(nr_votavel) == 2:
@@ -145,7 +150,7 @@ def classifica_voto(cargo, nr_votavel):
 def main():
     print('lendo votação...')
     vt = carrega_votacao()
-    print('lendo eleitorado (filtrando PI)...')
+    print('lendo eleitorado (filtrando BA)...')
     el = carrega_eleitorado()
 
     pr = aptos_por_secao(el)
@@ -209,10 +214,10 @@ def main():
 
     df['ANO_ELEICAO'] = 2018
     df['NR_TURNO'] = 1
-    df['SG_UF'] = 'PI'
+    df['SG_UF'] = 'BA'
     df['DT_ELEICAO'] = pd.to_datetime(df['DT_ELEICAO'], format='%d/%m/%Y').dt.strftime('%Y-%m-%d')
     df['ID_LOCAL'] = df['CD_MUNICIPIO'] + '-' + df['NR_ZONA'] + '-' + df['NR_LOCAL_VOTACAO']
-    # 2018 não teve eleição suplementar no PI; a coluna existe para alinhar o
+    # 2018 não teve eleição suplementar no BA; a coluna existe para alinhar o
     # esquema com os demais anos.
     df['FL_ELEICAO_SUPLEMENTAR'] = False
 

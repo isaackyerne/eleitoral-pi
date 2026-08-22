@@ -1,6 +1,6 @@
 """Monta a base unificada 2018-2024 em star schema.
 
-Lê os quatro `dados/processados/eleicoes_pi_<ano>.csv` (camada bronze) e grava
+Lê os quatro `dados/processados/eleicoes_ba_<ano>.csv` (camada bronze) e grava
 `dados/processados/unificado/*.parquet`.
 
 O ponto do modelo é separar os grãos. Nos CSVs por ano, `QT_APTOS` convive com
@@ -25,7 +25,7 @@ def carrega_bronze():
     """Empilha os quatro anos, alinhando o esquema."""
     partes = []
     for ano in esquema.ANOS:
-        caminho = os.path.join(esquema.DIR_BRONZE, f'eleicoes_pi_{ano}.csv')
+        caminho = os.path.join(esquema.DIR_BRONZE, f'eleicoes_ba_{ano}.csv')
         d = pd.read_csv(caminho, dtype=esquema.BRONZE_DTYPES_LEITURA, low_memory=False)
         faltando = [c for c in esquema.bronze_colunas(ano) if c not in d.columns]
         assert not faltando, f'{ano}: faltam colunas no bronze {faltando}'
@@ -219,7 +219,11 @@ def monta_fatos(b, dim_eleicao_cargo, dim_votavel):
     # candidatura anulada. Quem decide isso é FL_VOTO_VALIDO, derivado do
     # arquivo oficial votacao_candidato_munzona — não a situação do registro,
     # que ignora anulações posteriores ao pleito.
-    inaptos = set(dim_votavel.loc[dim_votavel['FL_VOTO_VALIDO'].eq(False), 'SK_VOTAVEL'])
+    # fillna(True) antes do eq(False): FL_VOTO_VALIDO nulo é "desconhecido", não
+    # "inválido" — sem isso, indexar com uma máscara boolean nullable contendo NA
+    # quebra o .loc[], e semanticamente o desconhecido deve contar como válido
+    # (mesma postura de votaveis.py quando o arquivo de anulação não existe).
+    inaptos = set(dim_votavel.loc[dim_votavel['FL_VOTO_VALIDO'].fillna(True).eq(False), 'SK_VOTAVEL'])
     desconto = (b[b['SK_VOTAVEL'].isin(inaptos)]
                 .groupby(['SK_ELEICAO', 'SK_LOCAL', 'CD_CARGO'], as_index=False)['QT_VOTOS'].sum()
                 .rename(columns={'QT_VOTOS': '_desconto'}))
@@ -265,7 +269,7 @@ def monta_fato_oficial(dim_eleicao):
     partes = []
     for ano in esquema.ANOS:
         caminho = os.path.join(esquema.DIR_BRUTOS_TSE,
-                               f'detalhe_votacao_munzona_{ano}_PI.csv')
+                               f'detalhe_votacao_munzona_{ano}_BA.csv')
         if not os.path.exists(caminho):
             continue
         d = pd.read_csv(caminho, sep=';', encoding='latin1', dtype=str, quotechar='"',

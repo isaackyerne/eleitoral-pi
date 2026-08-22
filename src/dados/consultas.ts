@@ -536,3 +536,24 @@ export async function doisMaisVotadosPorLocal(f: Filtros): Promise<DoisMaisVotad
 
   return { candidatos, locais }
 }
+
+// ─── perfil do eleitorado ────────────────────────────────────────────────
+
+export type PerfilLinha = { DIMENSAO: string; CATEGORIA: string; QT_ELEITORES: number }
+
+/**
+ * Perfil demográfico do eleitorado **atual** (situação corrente do TSE, não
+ * uma série por eleição — por isso só respeita `cdMunicipio`; eleição, cargo,
+ * partido e candidato não têm sentido aqui). Vem já em formato longo (uma
+ * linha por dimensão x categoria), então uma consulta só serve todos os
+ * gráficos do painel; o componente filtra por `DIMENSAO` no cliente.
+ */
+export function perfilEleitorado(cdMunicipio: number | null) {
+  const cond = cdMunicipio !== null ? `WHERE CD_MUNICIPIO = ${cdMunicipio}` : ''
+  return consulta<PerfilLinha>(`
+    SELECT DIMENSAO, CATEGORIA, CAST(SUM(QT_ELEITORES) AS BIGINT) AS QT_ELEITORES
+    FROM fato_perfil_eleitorado
+    ${cond}
+    GROUP BY 1, 2
+  `)
+}
