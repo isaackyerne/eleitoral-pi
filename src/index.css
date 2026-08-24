@@ -89,3 +89,11 @@ body {
 .leaflet-container {
   font-family: inherit;
 }
+
+/* A Netlify injeta um iframe de 26x26 fixo no canto inferior direito, fora do
+   #root — ele não herda o tema e fica como um selo claro sobre o painel. O
+   inline style dela não define `display`, mas o !important protege caso passe
+   a definir. */
+#nl-badge-frame {
+  display: none !important;
+}
