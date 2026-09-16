@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "eleitoral-ba-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "../eleitoral-ba", "run", "dev", "--", "--port", "5174"],
+      "port": 5174
     }
   ]
 }

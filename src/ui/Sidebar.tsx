@@ -31,6 +31,9 @@ const ICONES: Record<SecaoId, ReactNode> = {
     <><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M3 20h18" /></>
   ),
   partidos: <><path d="M4 6h10" /><path d="M4 12h16" /><path d="M4 18h6" /></>,
+  perfil: (
+    <><circle cx="9" cy="8" r="3.5" /><path d="M3.5 20a5.5 5.5 0 0111 0" /><path d="M16 4.5a3.5 3.5 0 010 7M18 13a5.5 5.5 0 013.5 6.5" /></>
+  ),
   cruzamento: (
     <><path d="M4 6l7 7-7 7" /><path d="M20 6l-7 7 7 7" /></>
   ),

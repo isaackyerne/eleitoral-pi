@@ -536,3 +536,103 @@ export async function doisMaisVotadosPorLocal(f: Filtros): Promise<DoisMaisVotad
 
   return { candidatos, locais }
 }
+
+// ─── perfil do eleitorado ────────────────────────────────────────────────
+
+export type PerfilLinha = { DIMENSAO: string; CATEGORIA: string; QT_ELEITORES: number }
+
+/** Aspas simples dobradas — só isso já basta pro literal de string do DuckDB. */
+function aspas(s: string): string {
+  return s.replace(/'/g, "''")
+}
+
+/**
+ * Perfil demográfico do eleitorado **atual** (situação corrente do TSE, não
+ * uma série por eleição — por isso só respeita `cdMunicipio`/`bairro`/`local`;
+ * eleição, cargo, partido e candidato não têm sentido aqui). Vem já em
+ * formato longo (uma linha por dimensão x categoria), então uma consulta só
+ * serve todos os gráficos do painel; o componente filtra por `DIMENSAO` no
+ * cliente.
+ *
+ * `local` é a chave natural (zona, local de votação) do arquivo do TSE, não
+ * `SK_LOCAL` — essa fonte não tem série por eleição, então não existe a
+ * renumeração entre anos que `SK_LOCAL` resolve, e a chave natural já é
+ * suficiente e mais direta. Um `local` específico dispensa o `bairro`
+ * (o local já sabe a que bairro pertence); `bairro` sozinho soma todos os
+ * locais dele, o que exige juntar com `dim_local_perfil` pra saber quais são.
+ */
+export function perfilEleitorado(
+  cdMunicipio: number | null,
+  filtro: { bairro?: string; local?: { nrZona: number; nrLocal: number } } = {},
+) {
+  if (filtro.local) {
+    const cond = [
+      cdMunicipio !== null ? `CD_MUNICIPIO = ${cdMunicipio}` : null,
+      `NR_ZONA = ${filtro.local.nrZona} AND NR_LOCAL_VOTACAO = ${filtro.local.nrLocal}`,
+    ].filter((c) => c !== null)
+    return consulta<PerfilLinha>(`
+      SELECT DIMENSAO, CATEGORIA, CAST(SUM(QT_ELEITORES) AS BIGINT) AS QT_ELEITORES
+      FROM fato_perfil_eleitorado
+      WHERE ${cond.join(' AND ')}
+      GROUP BY 1, 2
+    `)
+  }
+
+  if (filtro.bairro) {
+    const cond = [
+      cdMunicipio !== null ? `f.CD_MUNICIPIO = ${cdMunicipio}` : null,
+      `l.NM_BAIRRO = '${aspas(filtro.bairro)}'`,
+    ].filter((c) => c !== null)
+    return consulta<PerfilLinha>(`
+      SELECT f.DIMENSAO, f.CATEGORIA, CAST(SUM(f.QT_ELEITORES) AS BIGINT) AS QT_ELEITORES
+      FROM fato_perfil_eleitorado f
+      JOIN dim_local_perfil l
+        ON l.CD_MUNICIPIO = f.CD_MUNICIPIO AND l.NR_ZONA = f.NR_ZONA AND l.NR_LOCAL_VOTACAO = f.NR_LOCAL_VOTACAO
+      WHERE ${cond.join(' AND ')}
+      GROUP BY 1, 2
+    `)
+  }
+
+  const cond = cdMunicipio !== null ? `WHERE CD_MUNICIPIO = ${cdMunicipio}` : ''
+  return consulta<PerfilLinha>(`
+    SELECT DIMENSAO, CATEGORIA, CAST(SUM(QT_ELEITORES) AS BIGINT) AS QT_ELEITORES
+    FROM fato_perfil_eleitorado
+    ${cond}
+    GROUP BY 1, 2
+  `)
+}
+
+export type OpcaoBairroPerfil = { NM_BAIRRO: string; QT_LOCAIS: number }
+
+/** Bairros de um município, pro seletor primário do Perfil do Eleitorado. */
+export function bairrosPerfil(cdMunicipio: number) {
+  return consulta<OpcaoBairroPerfil>(`
+    SELECT NM_BAIRRO, COUNT(*) AS QT_LOCAIS
+    FROM dim_local_perfil
+    WHERE CD_MUNICIPIO = ${cdMunicipio}
+    GROUP BY 1
+    ORDER BY NM_BAIRRO
+  `)
+}
+
+export type OpcaoLocalPerfil = {
+  NR_ZONA: number; NR_LOCAL_VOTACAO: number; NM_LOCAL_VOTACAO: string; NM_BAIRRO: string
+}
+
+/**
+ * Locais de votação de um município, pro seletor secundário do Perfil do
+ * Eleitorado — `bairro` estreita pra só os locais daquele bairro, pensado pra
+ * quando o bairro já foi escolhido no seletor primário.
+ */
+export function locaisPerfil(cdMunicipio: number, bairro?: string) {
+  const cond = [
+    `CD_MUNICIPIO = ${cdMunicipio}`,
+    bairro ? `NM_BAIRRO = '${aspas(bairro)}'` : null,
+  ].filter((c) => c !== null)
+  return consulta<OpcaoLocalPerfil>(`
+    SELECT NR_ZONA, NR_LOCAL_VOTACAO, NM_LOCAL_VOTACAO, NM_BAIRRO
+    FROM dim_local_perfil
+    WHERE ${cond.join(' AND ')}
+    ORDER BY NM_LOCAL_VOTACAO
+  `)
+}

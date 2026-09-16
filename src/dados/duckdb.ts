@@ -11,8 +11,9 @@ import * as duckdb from '@duckdb/duckdb-wasm'
 
 const TABELAS = [
   'fato_votos', 'fato_local_cargo', 'fato_local', 'fato_oficial_munzona',
+  'fato_perfil_eleitorado',
   'dim_eleicao', 'dim_eleicao_cargo', 'dim_cargo', 'dim_municipio',
-  'dim_local', 'dim_local_atual', 'dim_partido', 'dim_partido_ano',
+  'dim_local', 'dim_local_atual', 'dim_local_perfil', 'dim_partido', 'dim_partido_ano',
   'dim_votavel', 'dim_politico',
 ] as const
 

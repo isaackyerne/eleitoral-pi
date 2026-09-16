@@ -37,7 +37,7 @@ function Tile({
 }
 
 export function Kpis({ dados }: { dados: Dados | null }) {
-  const v = (n: number | undefined) => (n === undefined ? '—' : formataInteiro(n))
+  const v = (n: number | undefined | null) => (n === undefined || n === null ? '—' : formataInteiro(n))
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       <Tile rotulo="Total de votos" valor={v(dados?.QT_VOTOS)} icone="votos" />
