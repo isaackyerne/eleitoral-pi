@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip as TooltipMapa } from 'react-leaflet'
+import { CircleMarker, GeoJSON, MapContainer, Pane, TileLayer, Tooltip as TooltipMapa } from 'react-leaflet'
 import {
   CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as TooltipGrafico, XAxis, YAxis,
 } from 'recharts'
@@ -14,7 +14,9 @@ import { exportarExcel } from '../dados/excel'
 import { Busca, Campo, Seletor } from '../ui/Campo'
 import { Nota } from '../ui/Nota'
 import { TINTA, formataCompacto, formataInteiro, formataPct } from '../viz/paleta'
-import { ATRIBUICAO_CARTO, CENTRO_BA, urlTilesCarto, ZOOM_BA } from '../viz/mapabase'
+import {
+  ATRIBUICAO_MAPA, CENTRO_BA, URL_TILES_BASE, URL_TILES_ROTULOS, ZOOM_BA, ZOOM_NATIVO_MAX,
+} from '../viz/mapabase'
 
 /**
  * Comparação territorial de 1 a 4 candidatos, de qualquer eleição e cargo,
@@ -452,7 +454,10 @@ export function Cruzamento({
                   style={{ height: '100%', width: '100%', background: t.plano }}
                   aria-label="Mapa do cruzamento"
                 >
-                  <TileLayer url={urlTilesCarto(MODO_MAPA)} attribution={ATRIBUICAO_CARTO} />
+                  <TileLayer url={URL_TILES_BASE} attribution={ATRIBUICAO_MAPA} maxNativeZoom={ZOOM_NATIVO_MAX} />
+                  <Pane name="rotulos" style={{ zIndex: 450, pointerEvents: 'none' }}>
+                    <TileLayer url={URL_TILES_ROTULOS} maxNativeZoom={ZOOM_NATIVO_MAX} />
+                  </Pane>
                   <GeoJSON
                     key="mun"
                     data={geo}

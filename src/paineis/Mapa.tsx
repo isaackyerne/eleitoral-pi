@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip } from 'react-leaflet'
+import { CircleMarker, GeoJSON, MapContainer, Pane, TileLayer, Tooltip } from 'react-leaflet'
 import type { Layer } from 'leaflet'
 import type { Feature, FeatureCollection } from 'geojson'
 import type { DoisMaisVotados, LocalMapa, MunicipioMapa, TopLocalCandidato } from '../dados/consultas'
@@ -9,7 +9,9 @@ import { BotaoColapsar } from '../ui/BotaoColapsar'
 import { Nota } from '../ui/Nota'
 import { OUTROS, TINTA, corDoSlot, formataInteiro, formataPct } from '../viz/paleta'
 import { corSequencial, RAMPA_PASSOS } from '../viz/projecao'
-import { ATRIBUICAO_CARTO, CENTRO_BA, urlTilesCarto, ZOOM_BA } from '../viz/mapabase'
+import {
+  ATRIBUICAO_MAPA, CENTRO_BA, URL_TILES_BASE, URL_TILES_ROTULOS, ZOOM_BA, ZOOM_NATIVO_MAX,
+} from '../viz/mapabase'
 
 /**
  * Mapa da Bahia sobre tiles reais (CARTO Positron, atribuição OpenStreetMap).
@@ -208,7 +210,10 @@ export function Mapa({
               style={{ height: '100%', width: '100%', background: t.plano }}
               aria-label="Mapa da Bahia por município"
             >
-              <TileLayer url={urlTilesCarto(MODO_MAPA)} attribution={ATRIBUICAO_CARTO} />
+              <TileLayer url={URL_TILES_BASE} attribution={ATRIBUICAO_MAPA} maxNativeZoom={ZOOM_NATIVO_MAX} />
+              <Pane name="rotulos" style={{ zIndex: 450, pointerEvents: 'none' }}>
+                <TileLayer url={URL_TILES_ROTULOS} maxNativeZoom={ZOOM_NATIVO_MAX} />
+              </Pane>
               <GeoJSON
                 key={`mun-${camada}-${pintura}-${municipios.length}`}
                 data={geo}
