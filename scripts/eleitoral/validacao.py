@@ -8,9 +8,20 @@ import pandas as pd
 from . import esquema, partidos
 
 # Totais conferidos contra os arquivos brutos do TSE em cada ano.
-VOTOS_POR_ANO = {2018: 9_987_935, 2020: 4_593_905, 2022: 8_456_024, 2024: 4_599_674}
+# 2018, 2022 e 2026 incluem Presidente (1º turno), que vem do arquivo nacional do TSE:
+# 1.997.932, 2.115.645 e 2.240.883 votos. É um pouco mais que o Governador do mesmo
+# estado porque o voto em trânsito deixa eleitor de outra UF votar para Presidente
+# numa seção daqui. Os valores sem Presidente eram 9.987.935, 8.456.024 e 11.196.930.
+VOTOS_POR_ANO = {
+    2018: 11_985_867, 2020: 4_593_905, 2022: 10_571_669, 2024: 4_599_674,
+    # 2026 sem Presidente = 2.239.386 votantes x 5 votos (Governador, Dep. Federal,
+    # Dep. Estadual e 2 de Senador); conferido contra o arquivo de votação por
+    # seção, 1º turno. Com Presidente: + 2.240.883.
+    2026: 13_437_813,
+}
 TOTAL_VOTOS = sum(VOTOS_POR_ANO.values())
-TOTAL_LINHAS = 1_093_619
+# 1.421.107 linhas dos 6 cargos + 82.471 de Presidente (33.169 + 24.698 + 24.604).
+TOTAL_LINHAS = 1_503_578
 
 # Resultados oficiais, em % dos votos válidos na definição legal — que exclui
 # votos em candidato com registro indeferido. Em 2022 três candidatos a
@@ -76,6 +87,12 @@ def _sem_fusao_partido(t):
     assert sk(2018, 10) == sk(2024, 10), 'PRB/Republicanos separados'
     assert sk(2018, 22) == sk(2024, 22), 'PR/PL separados'
     assert sk(2018, 36) == sk(2024, 36), 'PTC/AGIR separados'
+    # 2026: PMB virou Democrata (mesmo número, decisão do TSE de dez/2025) e o TSE
+    # passou a grafar PCDOB — ambos têm de continuar uma entidade só. Já o número 14
+    # trocou de dono: era do PTB e hoje é do Missão, partido novo.
+    assert sk(2024, 35) == sk(2026, 35), 'PMB e Democrata separados'
+    assert sk(2024, 65) == sk(2026, 65), 'PC do B e PCDOB separados'
+    assert sk(2022, 14) != sk(2026, 14), 'PTB e Missão fundidos no número 14'
 
 
 def _sem_fusao_votavel(t):
@@ -87,7 +104,12 @@ def _sem_fusao_votavel(t):
     # Um político não pode aparecer duas vezes na mesma disputa.
     comp = reais[reais['SK_POLITICO'].notna()]
     dup = comp.groupby(['SK_POLITICO', 'SK_ELEICAO', 'CD_MUNICIPIO_UE', 'CD_CARGO']).size()
-    assert (dup <= 1).all(), f'{int((dup > 1).sum())} políticos repetidos na mesma disputa'
+    if not (dup <= 1).all():
+        chaves = dup[dup > 1].index
+        quem = comp.set_index(['SK_POLITICO', 'SK_ELEICAO', 'CD_MUNICIPIO_UE', 'CD_CARGO']).loc[chaves]
+        cols = [c for c in ['SK_VOTAVEL', 'NR_VOTAVEL', 'NM_VOTAVEL', 'SQ_CANDIDATO', 'TP_VOTO'] if c in quem.columns]
+        raise AssertionError(
+            f'{len(chaves)} políticos repetidos na mesma disputa:\n{quem[cols].to_string()}')
 
 
 def _coerencia(t):
@@ -132,15 +154,14 @@ def _comparecimento(t):
         assert int(votos) == int(comp), \
             f'eleição {e["SK_ELEICAO"]}: votos em {cargo} ({votos:,}) != comparecimento ({comp:,})'
 
-    # Senador 2018 teve 2 vagas: o total é o dobro, e QT_VOTOS_NORM corrige.
+    # Senador com 2 vagas (2018 e 2026): o total é o dobro, e QT_VOTOS_NORM corrige.
     sen = dec[(dec['DS_CARGO'] == 'Senador') & (dec['QT_VOTOS_POR_ELEITOR'] == 2)]
-    if len(sen):
-        sk_e = int(sen['SK_ELEICAO'].iloc[0])
-        cd = int(sen['CD_CARGO'].iloc[0])
+    for _, s in sen.iterrows():
+        sk_e, cd = int(s['SK_ELEICAO']), int(s['CD_CARGO'])
         m = fv[(fv['SK_ELEICAO'] == sk_e) & (fv['CD_CARGO'] == cd)]
         comp = fl[fl['SK_ELEICAO'] == sk_e]['QT_COMPARECIMENTO'].sum()
-        assert int(m['QT_VOTOS'].sum()) == 2 * int(comp), 'Senador 2018 não é 2x o comparecimento'
-        assert abs(m['QT_VOTOS_NORM'].sum() - comp) < 1, 'QT_VOTOS_NORM não normaliza Senador 2018'
+        assert int(m['QT_VOTOS'].sum()) == 2 * int(comp), f'Senador (eleição {sk_e}) não é 2x o comparecimento'
+        assert abs(m['QT_VOTOS_NORM'].sum() - comp) < 1, f'QT_VOTOS_NORM não normaliza Senador (eleição {sk_e})'
 
 
 def _regressao_oficial(t):
@@ -171,16 +192,21 @@ def _regressao_oficial(t):
 def _prefeituras(t):
     """Prefeituras por sigla canônica — pega uma fusão PSC/Podemos na hora.
 
-    Conta o eleito em qualquer turno da eleição ordinária: Teresina foi ao 2º
+    Conta um prefeito por município e ano, em qualquer turno: Teresina foi ao 2º
     turno em 2020, então o vencedor de lá não aparece entre os eleitos do 1º.
+    Entram também as suplementares, que prevalecem sobre a ordinária — em São
+    Lourenço do Piauí (2020) o eleito da ordinária teve o registro anulado e o
+    prefeito é o da suplementar; em Muricí dos Portelas a mais votada da ordinária
+    foi anulada e a prefeita saiu da suplementar.
     """
     de, dv, dp = t['dim_eleicao'], t['dim_votavel'], t['dim_partido']
     sigla = dp.set_index('SK_PARTIDO')['SG_PARTIDO']
     for ano, esperado in PREFEITURAS.items():
-        sks = set(de[(de['ANO_ELEICAO'] == ano) & (~de['FL_SUPLEMENTAR'])]['SK_ELEICAO'])
+        sks = set(de[de['ANO_ELEICAO'] == ano]['SK_ELEICAO'])
         eleitos = dv[dv['SK_ELEICAO'].isin(sks).fillna(False)
                      & dv['DS_CARGO'].eq('Prefeito').fillna(False)
                      & dv['FL_ELEITO'].fillna(False).astype(bool)]
+        eleitos = eleitos.sort_values('SK_ELEICAO').drop_duplicates('CD_MUNICIPIO_UE', keep='last')
         contagem = eleitos['SK_PARTIDO'].map(sigla).value_counts()
         for sg, qt in esperado.items():
             assert int(contagem.get(sg, 0)) == qt, \

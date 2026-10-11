@@ -14,7 +14,7 @@ DIR_UNIFICADO = os.path.join(DIR_BRONZE, 'unificado')
 DIR_BRUTOS_TSE = os.path.join(DIR_DADOS, 'brutos_tse')
 DIR_REFERENCIA = os.path.join(RAIZ, 'scripts', 'referencia')
 
-ANOS = [2018, 2020, 2022, 2024]
+ANOS = [2018, 2020, 2022, 2024, 2026]
 
 # Sentinelas de nulo do TSE. Os arquivos de votação usam '#NULO#'/'#NE#' e os de
 # candidatura usam '#NULO'/'#NE' — sem as quatro formas, o "#NE" de 2024 passa
@@ -24,7 +24,13 @@ NA_TSE = ['#NULO#', '#NE#', '#NULO', '#NE']
 # Esferas: define quais anos são estaduais e quais são municipais. Comparar
 # volume de voto entre esferas não faz sentido (cargos diferentes), então o
 # modelo carrega isso explicitamente.
-ESFERA_POR_ANO = {2018: 'Estadual', 2020: 'Municipal', 2022: 'Estadual', 2024: 'Municipal'}
+ESFERA_POR_ANO = {
+    2018: 'Estadual', 2020: 'Municipal', 2022: 'Estadual', 2024: 'Municipal', 2026: 'Estadual',
+}
+
+# Presidente é o único cargo de âmbito nacional: o TSE o publica só nos arquivos `_BR`
+# (ver presidente.py). Dentro da base ele é um cargo comum da eleição geral.
+CD_CARGO_PRESIDENTE = 1
 
 # Cargos majoritários de voto único, usados para derivar comparecimento.
 CARGO_COMPARECIMENTO = {'Estadual': 'Governador', 'Municipal': 'Prefeito'}
@@ -32,16 +38,19 @@ CARGO_COMPARECIMENTO = {'Estadual': 'Governador', 'Municipal': 'Prefeito'}
 # Cargos que aceitam voto de legenda.
 CARGOS_PROPORCIONAIS = {'Deputado Federal', 'Deputado Estadual', 'Vereador'}
 
-# Vagas em disputa por (ano, cargo). Senador teve 2 vagas em 2018 e 1 em 2022,
-# então o total de votos do cargo em 2018 é o dobro do comparecimento.
+# Vagas em disputa por (ano, cargo). Senador teve 2 vagas em 2018, 1 em 2022 e 2 em
+# 2026, então o total de votos do cargo em 2018 e 2026 é o dobro do comparecimento.
 VAGAS = {
+    (2018, 'Presidente'): 1, (2022, 'Presidente'): 1, (2026, 'Presidente'): 1,
     (2018, 'Governador'): 1, (2018, 'Senador'): 2,
     (2018, 'Deputado Federal'): 10, (2018, 'Deputado Estadual'): 30,
     (2022, 'Governador'): 1, (2022, 'Senador'): 1,
     (2022, 'Deputado Federal'): 10, (2022, 'Deputado Estadual'): 30,
+    (2026, 'Governador'): 1, (2026, 'Senador'): 2,
+    (2026, 'Deputado Federal'): 10, (2026, 'Deputado Estadual'): 30,
 }
 # Quantos votos cada eleitor deposita naquele cargo.
-VOTOS_POR_ELEITOR = {(2018, 'Senador'): 2}
+VOTOS_POR_ELEITOR = {(2018, 'Senador'): 2, (2026, 'Senador'): 2}
 
 # ---------------------------------------------------------------------------
 # Camada bronze: eleicoes_pi_<ano>.csv

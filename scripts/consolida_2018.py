@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from eleitoral import esquema  # noqa: E402
+from eleitoral import esquema, presidente  # noqa: E402
 
 BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dados')
 BRUTO = os.path.join(BASE, '2018')
@@ -40,6 +40,8 @@ def carrega_votacao():
         sep=';', encoding='latin1', quotechar='"', dtype=str,
         na_values=esquema.NA_TSE,
     )
+    # Presidente só existe no arquivo nacional do TSE; ver eleitoral/presidente.py.
+    df = presidente.anexa(df, 2018)
     df['QT_VOTOS'] = pd.to_numeric(df['QT_VOTOS'])
     return df
 

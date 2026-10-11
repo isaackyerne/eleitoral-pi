@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from eleitoral import esquema  # noqa: E402
+from eleitoral import esquema, presidente  # noqa: E402
 
 BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dados')
 BRUTO = os.path.join(BASE, '2022')
@@ -41,12 +41,18 @@ CHAVE_SECAO = ['NR_TURNO', 'CD_MUNICIPIO', 'NR_ZONA', 'NR_SECAO']
 CHAVE_LOCAL = ['NR_TURNO', 'CD_MUNICIPIO', 'NR_ZONA', 'NR_LOCAL_VOTACAO']
 
 CARGOS = {
+    'PRESIDENTE': 'Presidente',
     'GOVERNADOR': 'Governador',
     'SENADOR': 'Senador',
     'DEPUTADO FEDERAL': 'Deputado Federal',
     'DEPUTADO ESTADUAL': 'Deputado Estadual',
 }
 CARGOS_PROPORCIONAIS = {'Deputado Federal', 'Deputado Estadual'}
+
+# Partido que lançou candidato a Presidente mas não recebeu voto de legenda no Piauí, e por
+# isso não tem o nome extraído das próprias linhas de voto. Nome conforme o consulta_cand
+# nacional de 2022.
+PARTIDOS_EXTRA = {'27': 'DEMOCRACIA CRISTÃ'}
 
 
 def carrega_votacao():
@@ -56,6 +62,8 @@ def carrega_votacao():
         na_values=esquema.NA_TSE,
     )
     df.columns = [c.strip() for c in df.columns]
+    # Presidente só existe no arquivo nacional do TSE; ver eleitoral/presidente.py.
+    df = presidente.anexa(df, 2022)
     df['QT_VOTOS'] = pd.to_numeric(df['QT_VOTOS'])
     df['DS_CARGO'] = df['DS_CARGO'].map(CARGOS)
     assert df['DS_CARGO'].notna().all(), 'cargo desconhecido no arquivo de votação'
@@ -198,6 +206,7 @@ def main():
     # O nome de cada partido é extraído das próprias linhas de voto de legenda.
     legenda = votos[votos['TP_VOTO'] == 'Legenda'][['NR_VOTAVEL', 'NM_VOTAVEL']].drop_duplicates()
     mapa_partido = dict(zip(legenda['NR_VOTAVEL'], legenda['NM_VOTAVEL']))
+    mapa_partido.update(PARTIDOS_EXTRA)
     votos['NM_PARTIDO'] = votos['NR_PARTIDO'].map(mapa_partido)
     sem_nome = votos[votos['NR_PARTIDO'].notna() & votos['NM_PARTIDO'].isna()]['NR_PARTIDO'].unique()
     assert len(sem_nome) == 0, f'partidos sem nome: {sorted(sem_nome)}'
