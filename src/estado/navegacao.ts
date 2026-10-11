@@ -7,6 +7,7 @@ export const SECOES = [
   { id: 'participacao', rotulo: 'Participação' },
   { id: 'partidos', rotulo: 'Partidos' },
   { id: 'perfil', rotulo: 'Perfil do eleitorado' },
+  { id: 'territorio', rotulo: 'Votação por bairro' },
   { id: 'cruzamento', rotulo: 'Cruzamento' },
 ] as const
 

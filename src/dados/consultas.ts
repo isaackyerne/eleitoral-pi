@@ -1,5 +1,5 @@
 import { clausulas, condEleicao, type Filtros } from '../estado/filtros'
-import { consulta } from './duckdb'
+import { consulta, garanteTabela } from './duckdb'
 
 /**
  * Consultas do painel.
@@ -481,7 +481,7 @@ export type DoisMaisVotados = { candidatos: CandidatoTopDois[]; locais: VotosDoi
 /**
  * Os dois candidatos mais votados do cargo/eleição do recorte, e o voto de
  * cada um por local — usado só para o destaque de vencedor local no mapa de
- * Governador, onde "os dois mais votados" é um fato da eleição, não do
+ * Governador e de Presidente, onde "os dois mais votados" é um fato da eleição, não do
  * município filtrado. Por isso o top 2 ignora `cdMunicipio`; só o resultado
  * por local respeita esse filtro, igual ao Cruzamento.
  *
@@ -634,5 +634,191 @@ export function locaisPerfil(cdMunicipio: number, bairro?: string) {
     FROM dim_local_perfil
     WHERE ${cond.join(' AND ')}
     ORDER BY NM_LOCAL_VOTACAO
+  `)
+}
+
+// ─── votação por bairro → local ──────────────────────────────────────────
+
+export type OpcaoPolitico = { SK_POLITICO: number; NM_URNA: string; NM_POLITICO: string; ANOS: string }
+
+/**
+ * Políticos com voto nominal no município, em qualquer eleição da série
+ * principal — a lista de busca do painel "Votação por bairro".
+ *
+ * Para cargo municipal só entram candidatos da própria cidade; para
+ * deputado, todo candidato do estado que recebeu voto ali. `SK_POLITICO` é o
+ * que liga a mesma pessoa entre eleições (e entre cargos), então escolher um
+ * nome já traz todas as candidaturas dele.
+ */
+export function politicosDoMunicipio(cdMunicipio: number) {
+  return consulta<OpcaoPolitico>(`
+    WITH loc AS (SELECT SK_LOCAL, SK_ELEICAO FROM dim_local WHERE CD_MUNICIPIO = ${cdMunicipio})
+    SELECT v.SK_POLITICO, p.NM_POLITICO,
+           arg_max(COALESCE(v.NM_URNA, v.NM_VOTAVEL), v.SK_ELEICAO) AS NM_URNA,
+           array_to_string(list_sort(list_distinct(list(e.ANO_ELEICAO))), ', ') AS ANOS
+    FROM fato_votos f
+    JOIN loc ON loc.SK_LOCAL = f.SK_LOCAL AND loc.SK_ELEICAO = f.SK_ELEICAO
+    JOIN dim_votavel v ON v.SK_VOTAVEL = f.SK_VOTAVEL
+    JOIN dim_eleicao e ON e.SK_ELEICAO = f.SK_ELEICAO
+    JOIN dim_politico p ON p.SK_POLITICO = v.SK_POLITICO
+    WHERE e.FL_SERIE_PRINCIPAL AND v.TP_VOTO = 'Nominal'
+    GROUP BY v.SK_POLITICO, p.NM_POLITICO
+    ORDER BY p.NM_POLITICO
+  `)
+}
+
+export type ColunaTerritorio = {
+  SK_VOTAVEL: number; SK_ELEICAO: number; CD_CARGO: number; ANO_ELEICAO: number
+  DS_CARGO: string; NOME: string; SG_PARTIDO: string | null
+  DS_SIT_TOT_TURNO: string | null; VOTOS: number
+}
+
+/** Candidaturas de um político com voto no município — uma coluna cada. */
+export function candidaturasDoPolitico(skPolitico: number, cdMunicipio: number) {
+  return consulta<ColunaTerritorio>(`
+    WITH loc AS (SELECT SK_LOCAL, SK_ELEICAO FROM dim_local WHERE CD_MUNICIPIO = ${cdMunicipio})
+    SELECT v.SK_VOTAVEL, v.SK_ELEICAO, v.CD_CARGO, e.ANO_ELEICAO, c.DS_CARGO,
+           COALESCE(v.NM_URNA, v.NM_VOTAVEL) AS NOME, p.SG_PARTIDO, v.DS_SIT_TOT_TURNO,
+           CAST(SUM(f.QT_VOTOS_NORM) AS DOUBLE) AS VOTOS
+    FROM fato_votos f
+    JOIN loc ON loc.SK_LOCAL = f.SK_LOCAL AND loc.SK_ELEICAO = f.SK_ELEICAO
+    JOIN dim_votavel v ON v.SK_VOTAVEL = f.SK_VOTAVEL
+    JOIN dim_eleicao e ON e.SK_ELEICAO = f.SK_ELEICAO
+    JOIN dim_cargo c ON c.CD_CARGO = v.CD_CARGO
+    LEFT JOIN dim_partido p ON p.SK_PARTIDO = v.SK_PARTIDO
+    WHERE e.FL_SERIE_PRINCIPAL AND v.TP_VOTO = 'Nominal' AND v.SK_POLITICO = ${skPolitico}
+    GROUP BY ALL
+    ORDER BY e.ANO_ELEICAO, v.CD_CARGO
+  `)
+}
+
+export type LocalTerritorio = {
+  SK_LOCAL: number; NM_LOCAL: string; BAIRRO: string; NR_ZONA: number; QT_SECOES: number
+}
+
+/**
+ * Locais de votação do município com o bairro **mais recente** de cada um.
+ *
+ * O bairro de um mesmo `SK_LOCAL` pode mudar de grafia ou de cadastro entre
+ * eleições; usar o mais recente põe todas as colunas (de anos diferentes) sob
+ * a mesma linha, em vez de espalhar o local por bairros distintos. Só entram
+ * eleições da série principal — as suplementares têm cadastro incompleto.
+ */
+export function locaisDoMunicipio(cdMunicipio: number) {
+  return consulta<LocalTerritorio>(`
+    SELECT l.SK_LOCAL, la.NM_LOCAL_REF AS NM_LOCAL,
+           arg_max(COALESCE(NULLIF(TRIM(l.NM_BAIRRO), ''), 'SEM BAIRRO'), l.SK_ELEICAO) AS BAIRRO,
+           arg_max(l.NR_ZONA, l.SK_ELEICAO) AS NR_ZONA,
+           CAST(arg_max(COALESCE(fl.QT_SECOES, 0), l.SK_ELEICAO) AS INTEGER) AS QT_SECOES
+    FROM dim_local l
+    JOIN dim_eleicao e ON e.SK_ELEICAO = l.SK_ELEICAO
+    JOIN dim_local_atual la ON la.SK_LOCAL = l.SK_LOCAL
+    LEFT JOIN fato_local fl ON fl.SK_LOCAL = l.SK_LOCAL AND fl.SK_ELEICAO = l.SK_ELEICAO
+    WHERE l.CD_MUNICIPIO = ${cdMunicipio} AND e.FL_SERIE_PRINCIPAL
+    GROUP BY l.SK_LOCAL, la.NM_LOCAL_REF
+  `)
+}
+
+export type CelulaTerritorio = {
+  NIVEL: 'L' | 'B' | 'M'; CHAVE: string; VOTOS: number; POSICAO: number; CONCORRENTES: number
+}
+
+/**
+ * Votos de um candidato por local (`L`, chave = SK_LOCAL), por bairro (`B`,
+ * chave = nome) e no município (`M`), cada um com a **colocação** dele entre
+ * todos os candidatos nominais do mesmo cargo e eleição naquele recorte.
+ *
+ * A colocação é recalculada em cada nível — o 1º do bairro não é
+ * necessariamente o 1º de cada escola dele. Empate divide a posição (RANK).
+ * Candidato sem voto num recorte simplesmente não aparece nele.
+ */
+export function votosPorTerritorio(
+  c: { skEleicao: number; cdCargo: number; skVotavel: number }, cdMunicipio: number,
+) {
+  return consulta<CelulaTerritorio>(`
+    WITH mapa AS (
+      SELECT l.SK_LOCAL,
+             arg_max(COALESCE(NULLIF(TRIM(l.NM_BAIRRO), ''), 'SEM BAIRRO'), l.SK_ELEICAO) AS BAIRRO
+      FROM dim_local l JOIN dim_eleicao e ON e.SK_ELEICAO = l.SK_ELEICAO
+      WHERE l.CD_MUNICIPIO = ${cdMunicipio} AND e.FL_SERIE_PRINCIPAL
+      GROUP BY l.SK_LOCAL
+    ),
+    base AS (
+      SELECT f.SK_LOCAL, f.SK_VOTAVEL, SUM(f.QT_VOTOS_NORM) AS V
+      FROM fato_votos f JOIN dim_votavel v ON v.SK_VOTAVEL = f.SK_VOTAVEL
+      WHERE f.SK_ELEICAO = ${c.skEleicao} AND f.CD_CARGO = ${c.cdCargo} AND v.TP_VOTO = 'Nominal'
+        AND f.SK_LOCAL IN (SELECT SK_LOCAL FROM mapa)
+      GROUP BY 1, 2
+    ),
+    loc AS (
+      SELECT SK_LOCAL, SK_VOTAVEL, V,
+             RANK() OVER (PARTITION BY SK_LOCAL ORDER BY V DESC) AS R,
+             COUNT(*) OVER (PARTITION BY SK_LOCAL) AS N
+      FROM base
+    ),
+    bai AS (
+      SELECT m.BAIRRO, b.SK_VOTAVEL, SUM(b.V) AS V FROM base b JOIN mapa m USING (SK_LOCAL) GROUP BY 1, 2
+    ),
+    bair AS (
+      SELECT BAIRRO, SK_VOTAVEL, V,
+             RANK() OVER (PARTITION BY BAIRRO ORDER BY V DESC) AS R,
+             COUNT(*) OVER (PARTITION BY BAIRRO) AS N
+      FROM bai
+    ),
+    mun AS (SELECT SK_VOTAVEL, SUM(V) AS V FROM base GROUP BY 1),
+    munr AS (
+      SELECT SK_VOTAVEL, V, RANK() OVER (ORDER BY V DESC) AS R, COUNT(*) OVER () AS N FROM mun
+    )
+    SELECT 'L' AS NIVEL, CAST(SK_LOCAL AS VARCHAR) AS CHAVE, CAST(V AS DOUBLE) AS VOTOS,
+           CAST(R AS INTEGER) AS POSICAO, CAST(N AS INTEGER) AS CONCORRENTES
+    FROM loc WHERE SK_VOTAVEL = ${c.skVotavel}
+    UNION ALL
+    SELECT 'B', BAIRRO, CAST(V AS DOUBLE), CAST(R AS INTEGER), CAST(N AS INTEGER)
+    FROM bair WHERE SK_VOTAVEL = ${c.skVotavel}
+    UNION ALL
+    SELECT 'M', '', CAST(V AS DOUBLE), CAST(R AS INTEGER), CAST(N AS INTEGER)
+    FROM munr WHERE SK_VOTAVEL = ${c.skVotavel}
+  `)
+}
+
+/**
+ * Seções (com algum voto nominal) de uma escola, nas eleições dadas.
+ *
+ * Vem de `fato_votos_secao`, que só é baixada quando alguém abre as seções de
+ * uma escola. A numeração de seção pode mudar entre eleições; a união delas é
+ * o que a tabela mostra, e a seção ausente num ano aparece como "—".
+ */
+export async function secoesDoLocal(skLocal: number, skEleicoes: number[]) {
+  await garanteTabela('fato_votos_secao')
+  const rs = await consulta<{ NR_SECAO: number }>(`
+    SELECT DISTINCT NR_SECAO FROM fato_votos_secao
+    WHERE SK_LOCAL = ${skLocal} AND SK_ELEICAO IN (${skEleicoes.join(', ')})
+    ORDER BY NR_SECAO
+  `)
+  return rs.map((r) => r.NR_SECAO)
+}
+
+export type CelulaSecao = { NR_SECAO: number; VOTOS: number; POSICAO: number; CONCORRENTES: number }
+
+/** Votos e colocação do candidato em cada seção de uma escola (mesma regra de `votosPorTerritorio`). */
+export async function votosPorSecao(
+  c: { skEleicao: number; cdCargo: number; skVotavel: number }, skLocal: number,
+) {
+  await garanteTabela('fato_votos_secao')
+  return consulta<CelulaSecao>(`
+    WITH b AS (
+      SELECT s.NR_SECAO, s.SK_VOTAVEL, s.QT_VOTOS_NORM AS V
+      FROM fato_votos_secao s JOIN dim_votavel v ON v.SK_VOTAVEL = s.SK_VOTAVEL
+      WHERE s.SK_ELEICAO = ${c.skEleicao} AND s.SK_LOCAL = ${skLocal} AND v.CD_CARGO = ${c.cdCargo}
+    ),
+    r AS (
+      SELECT NR_SECAO, SK_VOTAVEL, V,
+             RANK() OVER (PARTITION BY NR_SECAO ORDER BY V DESC) AS R,
+             COUNT(*) OVER (PARTITION BY NR_SECAO) AS N
+      FROM b
+    )
+    SELECT NR_SECAO, CAST(V AS DOUBLE) AS VOTOS, CAST(R AS INTEGER) AS POSICAO,
+           CAST(N AS INTEGER) AS CONCORRENTES
+    FROM r WHERE SK_VOTAVEL = ${c.skVotavel} ORDER BY NR_SECAO
   `)
 }

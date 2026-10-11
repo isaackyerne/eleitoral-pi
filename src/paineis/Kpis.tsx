@@ -6,7 +6,7 @@ import { formataInteiro } from '../viz/paleta'
  *
  * Sem gráfico: são valores únicos, e a forma certa para um valor único é o
  * próprio número. O votos usa `QT_VOTOS_NORM`, então continua somável mesmo
- * quando o recorte inclui o Senador de 2018, que teve duas vagas.
+ * quando o recorte inclui o Senador de 2018 ou 2026, que tiveram duas vagas.
  */
 
 const ICONES = {

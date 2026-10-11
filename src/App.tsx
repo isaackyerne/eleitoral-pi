@@ -18,6 +18,7 @@ import { Kpis } from './paineis/Kpis'
 import { Mapa } from './paineis/Mapa'
 import { Participacao } from './paineis/Participacao'
 import { PerfilEleitorado } from './paineis/PerfilEleitorado'
+import { VotacaoPorBairro } from './paineis/VotacaoPorBairro'
 import { RankingPartidos } from './paineis/RankingPartidos'
 import { RankingZonas } from './paineis/RankingZonas'
 import { Tabela } from './paineis/Tabela'
@@ -71,8 +72,12 @@ export default function App() {
   // Cargo é um código estável do TSE, mas resolvido pela descrição em vez de
   // fixado no código — evita depender de um número que só existe por
   // convenção externa ao painel.
-  const cargoGovernador = listas?.cargos.find((c) => c.DS_CARGO === 'Governador')?.CD_CARGO ?? null
-  const ehGovernador = cargoGovernador !== null && recorte.cdCargo === cargoGovernador
+  // Governador e Presidente: disputa majoritária estadual/nacional, em que "os dois
+  // mais votados" é um fato da eleição e o mapa destaca quem venceu em cada local.
+  const cargosDeDisputaEmDois = (listas?.cargos ?? [])
+    .filter((c) => c.DS_CARGO === 'Governador' || c.DS_CARGO === 'Presidente')
+    .map((c) => c.CD_CARGO)
+  const ehGovernador = recorte.cdCargo !== null && cargosDeDisputaEmDois.includes(recorte.cdCargo)
 
   // Cargos proporcionais (e Vereador) têm disputa mais pulverizada — 8 nomes
   // corta candidato relevante que 10 ainda pega.
@@ -190,7 +195,7 @@ export default function App() {
                 {titulo}
               </h1>
               <p className="mt-0.5 text-sm text-tinta-2">
-                Eleições de 2018 a 2024 no Piauí, a partir dos dados abertos do TSE.
+                Eleições de 2018 a 2026 no Piauí, a partir dos dados abertos do TSE.
               </p>
             </div>
           </header>
@@ -247,6 +252,13 @@ export default function App() {
           {secao === 'perfil' && (
             <PerfilEleitorado
               dados={dadosPerfil} nomeMunicipio={nomeMunicipioAtual} cdMunicipio={recorte.cdMunicipio}
+            />
+          )}
+
+          {secao === 'territorio' && (
+            <VotacaoPorBairro
+              key={filtros.cdMunicipio ?? 'nenhum'}
+              cdMunicipio={filtros.cdMunicipio} nomeMunicipio={nomeMunicipioAtual}
             />
           )}
 

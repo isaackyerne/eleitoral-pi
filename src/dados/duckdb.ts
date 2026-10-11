@@ -20,6 +20,9 @@ const TABELAS = [
 export type Tabela = (typeof TABELAS)[number]
 
 let conexao: Promise<duckdb.AsyncDuckDBConnection> | null = null
+// Guardada à parte da conexão: registrar um arquivo depois do início
+// (`garanteTabela`) é método do banco, não da conexão.
+let banco: duckdb.AsyncDuckDB | null = null
 
 async function inicia(): Promise<duckdb.AsyncDuckDBConnection> {
   const pacotes = duckdb.getJsDelivrBundles()
@@ -36,6 +39,7 @@ async function inicia(): Promise<duckdb.AsyncDuckDBConnection> {
   await db.instantiate(bundle.mainModule, bundle.pthreadWorker)
   URL.revokeObjectURL(url)
 
+  banco = db
   const con = await db.connect()
   // Registra cada parquet como uma view, para o SQL falar em nomes de tabela.
   await Promise.all(
@@ -55,6 +59,31 @@ async function inicia(): Promise<duckdb.AsyncDuckDBConnection> {
 export function conecta(): Promise<duckdb.AsyncDuckDBConnection> {
   conexao ??= inicia()
   return conexao
+}
+
+// Tabelas pesadas que só uma tela usa: ficam fora do carregamento inicial e
+// viram view na primeira vez que alguém pede. `fato_votos_secao` (~5 MB) só é
+// necessária ao abrir as seções de uma escola no painel "Votação por bairro".
+export type TabelaSobDemanda = 'fato_votos_secao'
+
+const sobDemanda = new Map<TabelaSobDemanda, Promise<void>>()
+
+/** Garante que a tabela exista como view; chamadas repetidas dividem a mesma promise. */
+export function garanteTabela(t: TabelaSobDemanda): Promise<void> {
+  let p = sobDemanda.get(t)
+  if (!p) {
+    p = (async () => {
+      const con = await conecta()
+      const resposta = await fetch(`${import.meta.env.BASE_URL}dados/${t}.parquet`)
+      if (!resposta.ok) throw new Error(`parquet ausente: ${t}`)
+      if (!banco) throw new Error('instância do DuckDB indisponível')
+      await banco.registerFileBuffer(`${t}.parquet`, new Uint8Array(await resposta.arrayBuffer()))
+      await con.query(`CREATE VIEW ${t} AS SELECT * FROM read_parquet('${t}.parquet')`)
+    })()
+    p.catch(() => sobDemanda.delete(t)) // permite nova tentativa depois de falha
+    sobDemanda.set(t, p)
+  }
+  return p
 }
 
 // Duas consultas com o mesmo texto disparadas no mesmo instante (comum

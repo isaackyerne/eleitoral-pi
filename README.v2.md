@@ -1,10 +1,16 @@
-# Eleições do Piauí — 2018 a 2024
+# Eleições do Piauí — 2018 a 2026
 
 Painel de dados eleitorais do Piauí, montado a partir dos dados abertos do
-TSE. Cobre as quatro eleições ordinárias do período (2018 Estadual, 2020
-Municipal, 2022 Estadual, 2024 Municipal), sempre 1º turno — eleições
-suplementares e o 2º turno de 2020 ficam de fora de propósito, pra não
+TSE. Cobre as cinco eleições ordinárias do período (2018 Estadual, 2020
+Municipal, 2022 Estadual, 2024 Municipal, 2026 Estadual), sempre 1º turno —
+eleições suplementares e o 2º turno de 2020 ficam de fora de propósito, pra não
 inflar comparação entre anos.
+
+Presidente (1º turno de 2018, 2022 e 2026) também está na base. O TSE publica esse
+cargo só nos arquivos nacionais (`_BR`), então `scripts/extrai_presidente.py` tira
+deles as linhas do Piauí antes de `consolida_<ano>.py`. O total de Presidente passa de
+Governador por poucos votos: o voto em trânsito deixa eleitor de outra UF votar para
+Presidente numa seção daqui. O 2º turno de Presidente não entra.
 
 Todo o processamento roda no navegador: os dados vêm em Parquet e são lidos
 direto por um DuckDB compilado pra Wasm, sem backend.
