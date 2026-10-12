@@ -642,6 +642,15 @@ export function locaisPerfil(cdMunicipio: number, bairro?: string) {
 export type OpcaoPolitico = { SK_POLITICO: number; NM_URNA: string; NM_POLITICO: string; ANOS: string }
 
 /**
+ * Eleições que o painel "Votação por bairro" oferece por candidatura: a série principal
+ * (1º turno das ordinárias) **mais o 2º turno** das ordinárias — Presidente 2018 e 2022,
+ * Prefeito de Teresina 2020. Os demais painéis seguem só no 1º turno (`FL_SERIE_PRINCIPAL`),
+ * porque somar turnos infla comparecimento; aqui cada turno é uma coluna separada.
+ * Suplementar nunca entra. Alias esperado: `e` = dim_eleicao.
+ */
+const ELEICAO_E_2_TURNO = '(e.FL_SERIE_PRINCIPAL OR (e.NR_TURNO = 2 AND NOT e.FL_SUPLEMENTAR))'
+
+/**
  * Políticos com voto nominal no município, em qualquer eleição da série
  * principal — a lista de busca do painel "Votação por bairro".
  *
@@ -661,14 +670,14 @@ export function politicosDoMunicipio(cdMunicipio: number) {
     JOIN dim_votavel v ON v.SK_VOTAVEL = f.SK_VOTAVEL
     JOIN dim_eleicao e ON e.SK_ELEICAO = f.SK_ELEICAO
     JOIN dim_politico p ON p.SK_POLITICO = v.SK_POLITICO
-    WHERE e.FL_SERIE_PRINCIPAL AND v.TP_VOTO = 'Nominal'
+    WHERE ${ELEICAO_E_2_TURNO} AND v.TP_VOTO = 'Nominal'
     GROUP BY v.SK_POLITICO, p.NM_POLITICO
     ORDER BY p.NM_POLITICO
   `)
 }
 
 export type ColunaTerritorio = {
-  SK_VOTAVEL: number; SK_ELEICAO: number; CD_CARGO: number; ANO_ELEICAO: number
+  SK_VOTAVEL: number; SK_ELEICAO: number; CD_CARGO: number; ANO_ELEICAO: number; NR_TURNO: number
   DS_CARGO: string; NOME: string; SG_PARTIDO: string | null
   DS_SIT_TOT_TURNO: string | null; VOTOS: number
 }
@@ -677,7 +686,7 @@ export type ColunaTerritorio = {
 export function candidaturasDoPolitico(skPolitico: number, cdMunicipio: number) {
   return consulta<ColunaTerritorio>(`
     WITH loc AS (SELECT SK_LOCAL, SK_ELEICAO FROM dim_local WHERE CD_MUNICIPIO = ${cdMunicipio})
-    SELECT v.SK_VOTAVEL, v.SK_ELEICAO, v.CD_CARGO, e.ANO_ELEICAO, c.DS_CARGO,
+    SELECT v.SK_VOTAVEL, v.SK_ELEICAO, v.CD_CARGO, e.ANO_ELEICAO, e.NR_TURNO, c.DS_CARGO,
            COALESCE(v.NM_URNA, v.NM_VOTAVEL) AS NOME, p.SG_PARTIDO, v.DS_SIT_TOT_TURNO,
            CAST(SUM(f.QT_VOTOS_NORM) AS DOUBLE) AS VOTOS
     FROM fato_votos f
@@ -686,9 +695,9 @@ export function candidaturasDoPolitico(skPolitico: number, cdMunicipio: number) 
     JOIN dim_eleicao e ON e.SK_ELEICAO = f.SK_ELEICAO
     JOIN dim_cargo c ON c.CD_CARGO = v.CD_CARGO
     LEFT JOIN dim_partido p ON p.SK_PARTIDO = v.SK_PARTIDO
-    WHERE e.FL_SERIE_PRINCIPAL AND v.TP_VOTO = 'Nominal' AND v.SK_POLITICO = ${skPolitico}
+    WHERE ${ELEICAO_E_2_TURNO} AND v.TP_VOTO = 'Nominal' AND v.SK_POLITICO = ${skPolitico}
     GROUP BY ALL
-    ORDER BY e.ANO_ELEICAO, v.CD_CARGO
+    ORDER BY e.ANO_ELEICAO, e.NR_TURNO, v.CD_CARGO
   `)
 }
 
