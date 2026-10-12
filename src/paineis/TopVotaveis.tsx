@@ -39,7 +39,7 @@ export function TopVotaveis({
       <div className="flex items-start gap-2">
         <h2 className="text-base font-semibold text-tinta">Mais votados</h2>
         <Nota titulo="Sobre a contagem">
-          Em 2018 cada eleitor votou em dois senadores. Para que os cargos e os
+          Em 2018 e 2026 cada eleitor votou em dois senadores. Para que os cargos e os
           anos fiquem comparáveis, esses votos são divididos pelo número de
           vagas.
         </Nota>

@@ -11,9 +11,15 @@ dados/2018/
 dados/2020/
 dados/2022/
 dados/2024/
+dados/2026/
 
 # Camada intermediária por ano (~430 MB; arquivos de até 149 MB)
 dados/processados/*.csv
+
+# Caches e saídas de análise (reproduzíveis pelos scripts de scripts/): cadastro de
+# eleitorado filtrado por município, tabelas intermediárias e planilhas entregues.
+dados/processados/_*.pkl
+dados/processados/*.xlsx
 
 # Arquivos de candidatura e resultado baixados do TSE (~1,3 GB)
 dados/brutos_tse/

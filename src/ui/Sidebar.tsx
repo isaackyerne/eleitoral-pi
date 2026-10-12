@@ -34,6 +34,9 @@ const ICONES: Record<SecaoId, ReactNode> = {
   perfil: (
     <><circle cx="9" cy="8" r="3.5" /><path d="M3.5 20a5.5 5.5 0 0111 0" /><path d="M16 4.5a3.5 3.5 0 010 7M18 13a5.5 5.5 0 013.5 6.5" /></>
   ),
+  territorio: (
+    <><path d="M3 5h18M3 12h18M3 19h18" /><path d="M8 5v14" /></>
+  ),
   cruzamento: (
     <><path d="M4 6l7 7-7 7" /><path d="M20 6l-7 7 7 7" /></>
   ),

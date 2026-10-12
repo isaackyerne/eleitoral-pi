@@ -111,6 +111,8 @@ def monta_dim_local(b, sk_local, dim_eleicao):
                 how='left', validate='many_to_one')
     assert d['SK_LOCAL'].notna().all(), 'local sem SK_LOCAL'
 
+    d = _aplica_geo_corrigida(d)
+
     d = d.rename(columns={'ID_LOCAL': 'ID_LOCAL_ANO'})
     # "ATIVO AGUARDANDO PROCESSAMENTO" só existe em 2020; vira flag para o
     # domínio da coluna ser igual nos quatro anos.
@@ -125,6 +127,31 @@ def monta_dim_local(b, sk_local, dim_eleicao):
     d['FL_LOCAL_REMANEJADO'] = d['FL_LOCAL_REMANEJADO'].fillna(False)
     d['FL_APTOS_ESTIMADO'] = d['FL_APTOS_ESTIMADO'].fillna(False)
     return esquema.aplica(d, 'dim_local').sort_values(['SK_LOCAL', 'SK_ELEICAO']).reset_index(drop=True)
+
+
+def _aplica_geo_corrigida(d):
+    """Troca a coordenada de (local, ano) em que o TSE errou o ponto.
+
+    `locais_geo_corrigida.csv` guarda só correções comprovadas, uma por (município,
+    zona, local, ano), com o motivo. Ao contrário de `_geo_manual`, SOBRESCREVE a
+    coordenada do TSE — por isso cada linha tem de achar exatamente um registro: se o
+    local sumir ou mudar de número, o script para em vez de ignorar a correção. O
+    bronze não é tocado; a correção vale só para a base unificada.
+    """
+    caminho = os.path.join(esquema.DIR_REFERENCIA, 'locais_geo_corrigida.csv')
+    if not os.path.exists(caminho):
+        return d
+    chave = ['CD_MUNICIPIO', 'NR_ZONA', 'NR_LOCAL_VOTACAO', 'ANO_ELEICAO']
+    c = pd.read_csv(caminho)
+    assert not c.duplicated(chave).any(), 'locais_geo_corrigida.csv: correção repetida'
+    d = d.copy()
+    idx = d.set_index(chave).index
+    for _, r in c.iterrows():
+        achou = idx.isin([tuple(r[k] for k in chave)])
+        assert achou.sum() == 1, (
+            f'locais_geo_corrigida.csv: {tuple(r[k] for k in chave)} casa com {achou.sum()} registros')
+        d.loc[achou, ['LATITUDE', 'LONGITUDE']] = [r['LATITUDE'], r['LONGITUDE']]
+    return d
 
 
 def _geo_manual():

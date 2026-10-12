@@ -37,21 +37,37 @@ def carrega_candidaturas():
     """
     partes = []
     for ano in esquema.ANOS:
-        caminho = os.path.join(esquema.DIR_BRUTOS_TSE, f'consulta_cand_{ano}_PI.csv')
-        c = pd.read_csv(caminho, sep=';', encoding='latin1', dtype=str, quotechar='"',
-                        na_values=esquema.NA_TSE, usecols=_COLS_CAND)
-        c['ANO_ELEICAO'] = ano
-        partes.append(c)
+        # Presidente só consta do arquivo nacional (extrai_presidente.py o reduz aos
+        # candidatos ao cargo); os demais cargos, do arquivo do estado.
+        for sufixo in ('PI', 'BR'):
+            caminho = os.path.join(esquema.DIR_BRUTOS_TSE, f'consulta_cand_{ano}_{sufixo}.csv')
+            if sufixo == 'BR' and not os.path.exists(caminho):
+                continue
+            c = pd.read_csv(caminho, sep=';', encoding='latin1', dtype=str, quotechar='"',
+                            na_values=esquema.NA_TSE, usecols=_COLS_CAND)
+            c['ANO_ELEICAO'] = ano
+            partes.append(c)
     c = pd.concat(partes, ignore_index=True)
 
     c['NR_TITULO_ELEITORAL_CANDIDATO'] = canon.limpa_sentinela(
         c['NR_TITULO_ELEITORAL_CANDIDATO'].astype('string'))
     c['FL_APTO'] = c['DS_SITUACAO_CANDIDATURA'].eq('APTO')
+    # Candidatura substituída, renunciada ou sem apuração sai com DS_SIT_TOT_TURNO
+    # "#NULO" (vira nulo na leitura). O arquivo mais novo do TSE traz essas linhas
+    # junto da candidatura que de fato recebeu os votos, com o MESMO número na mesma
+    # disputa — em 2024 e 2026 todo DS_SITUACAO_CANDIDATURA é "#NE", então só a
+    # apuração distingue quem é quem.
+    c['FL_TEM_RESULTADO'] = c['DS_SIT_TOT_TURNO'].notna()
+    # Quando duas candidaturas dividem o mesmo número na mesma disputa (substituição:
+    # os votos dos dois SQ caem no mesmo votável, pela chave natural), quem fica é a
+    # que ocupa o mandato — é ela que define, por exemplo, quantas prefeituras um
+    # partido ganhou (Muricí dos Portelas 2020: Ana Lina e Francisca, as duas PSD 55).
+    c['FL_ELEITA'] = c['DS_SIT_TOT_TURNO'].str.upper().str.startswith('ELEITO').fillna(False)
     c['UE'] = c['SG_UE'].str.lstrip('0').replace('', '0')
     # As chaves de junção vêm como texto do CSV; o bronze é numérico.
     for col in ['NR_TURNO', 'CD_CARGO']:
         c[col] = pd.to_numeric(c[col])
-    c = c.sort_values(['FL_APTO'], ascending=False)
+    c = c.sort_values(['FL_APTO', 'FL_TEM_RESULTADO', 'FL_ELEITA'], ascending=False, kind='stable')
     return c
 
 
@@ -108,7 +124,21 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     cand = carrega_candidaturas()
 
     chave = ['SK_ELEICAO', 'CD_MUNICIPIO_UE', 'CD_CARGO', 'NR_VOTAVEL']
-    v = (bronze.drop_duplicates(chave)[
+
+    # Duas candidaturas podem dividir o mesmo número na mesma disputa (substituição):
+    # os votos dos dois SQ caem no mesmo votável, pela chave natural, e quem o
+    # representa é a que ocupa o mandato — é ela que define, por exemplo, quantas
+    # prefeituras um partido ganhou (Muricí dos Portelas 2020: Ana Lina e Francisca,
+    # as duas PSD 55). Sem SQ no bronze (2024) a escolha cai no desempate de
+    # `carrega_candidaturas`.
+    sq_turno = cand.drop_duplicates(['SQ_CANDIDATO', 'NR_TURNO']).set_index(['SQ_CANDIDATO', 'NR_TURNO'])
+    idx_bronze = pd.MultiIndex.from_arrays([bronze['SQ_CANDIDATO'], bronze['NR_TURNO']])
+    prioridade = pd.DataFrame({
+        'eleita': sq_turno['FL_ELEITA'].reindex(idx_bronze).fillna(False).astype(bool).values,
+        'resultado': sq_turno['FL_TEM_RESULTADO'].reindex(idx_bronze).fillna(False).astype(bool).values,
+    }, index=bronze.index)
+    ordem = prioridade.sort_values(['eleita', 'resultado'], ascending=False, kind='stable').index
+    v = (bronze.loc[ordem].drop_duplicates(chave)[
         chave + ['ANO_ELEICAO', 'NR_TURNO', 'TP_VOTO', 'NM_VOTAVEL', 'SQ_CANDIDATO',
                  'NR_PARTIDO', 'TP_ESFERA']].copy())
 
@@ -119,6 +149,8 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     cand_por_nr = cand.drop_duplicates(['ANO_ELEICAO', 'NR_TURNO', 'UE', 'CD_CARGO', 'NR_CANDIDATO'])
 
     v['UE'] = v['CD_MUNICIPIO_UE'].astype(str).where(v['TP_ESFERA'] == 'Municipal', 'PI')
+    # A unidade eleitoral de Presidente é o país: SG_UE = 'BR' no consulta_cand.
+    v.loc[v['CD_CARGO'] == esquema.CD_CARGO_PRESIDENTE, 'UE'] = 'BR'
     por_sq = v['SQ_CANDIDATO'].map(cand_por_sq['NR_TITULO_ELEITORAL_CANDIDATO'])
 
     m = v.merge(
@@ -134,11 +166,18 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     m['SQ_CANDIDATO'] = m['SQ_CANDIDATO'].fillna(m['SQ_CANDIDATO_C'])
     enriquecido = m['SQ_CANDIDATO'].map(cand_por_sq['NR_TITULO_ELEITORAL_CANDIDATO'])
     m['NR_TITULO_ELEITORAL_CANDIDATO'] = enriquecido.fillna(m['NR_TITULO_ELEITORAL_CANDIDATO']).fillna(por_sq)
+    # O SQ é exato e identifica a pessoa; o trio (ano, turno, município, cargo, número)
+    # só vale onde não há SQ (2024). Por isso o SQ manda nos atributos — com o trio na
+    # frente, o mesmo número reaproveitado numa eleição suplementar do mesmo ano
+    # devolvia o nome da outra pessoa, e o `SK_POLITICO` (que sai do SQ) discordava do
+    # nome da mesma linha. O casamento é por (SQ, turno): o mesmo SQ aparece uma vez
+    # por turno, cada uma com a sua situação (Teresina foi a 2º turno em 2020).
+    indice = pd.MultiIndex.from_arrays([m['SQ_CANDIDATO'], m['NR_TURNO']])
     for col in ['NM_CANDIDATO', 'NM_URNA_CANDIDATO', 'DS_SITUACAO_CANDIDATURA',
                 'DS_SIT_TOT_TURNO', 'SG_FEDERACAO', 'DT_NASCIMENTO', 'DS_GENERO',
                 'DS_COR_RACA', 'DS_GRAU_INSTRUCAO', 'DS_OCUPACAO']:
-        pelo_sq = m['SQ_CANDIDATO'].map(cand_por_sq[col])
-        m[col] = m[col].fillna(pelo_sq)
+        pelo_sq = pd.Series(sq_turno[col].reindex(indice).values, index=m.index)
+        m[col] = pelo_sq.fillna(m[col])
 
     # Só voto nominal tem candidato. Legenda, branco e nulo não podem herdar
     # atributos de pessoa: o número de legenda é o do partido e pode coincidir
@@ -193,6 +232,12 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
     # Nenhum campo publicado distingue os dois casos; para o número oficial
     # exato use fato_oficial_munzona.
     m.loc[nominal & m['FL_VOTO_VALIDO'].isna(), 'FL_VOTO_VALIDO'] = False
+    # Presidente não passa por esse arquivo — `votacao_candidato_munzona_<ano>_PI` não
+    # o lista, então a regra acima o trataria como anulado. Aqui vale a apuração: voto
+    # em candidatura com resultado (eleito, não eleito, 2º turno) é válido; sem
+    # resultado (substituída, renunciada, indeferida) o TSE o conta como nulo.
+    pres = nominal & m['CD_CARGO'].eq(esquema.CD_CARGO_PRESIDENTE)
+    m.loc[pres, 'FL_VOTO_VALIDO'] = m.loc[pres, 'DS_SIT_TOT_TURNO'].notna()
 
     m['FL_ELEITO'] = m['DS_SIT_TOT_TURNO'].str.upper().str.startswith('ELEITO')
     m['FL_ELEITO'] = m['FL_ELEITO'].where(nominal, pd.NA).astype('boolean')
