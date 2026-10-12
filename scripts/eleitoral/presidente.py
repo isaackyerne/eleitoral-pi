@@ -7,13 +7,15 @@ do estado. Aqui elas são empilhadas na votação do ano, antes de qualquer outr
 de modo que daí em diante Presidente é só mais um cargo — passa pelo mesmo vínculo
 seção→local, pela mesma classificação de voto e pela mesma agregação.
 
-Dois ajustes, ambos para que Presidente caia DENTRO da eleição que já existe:
+Um ajuste, para que Presidente caia DENTRO da eleição que já existe:
 
-  - O TSE dá a Presidente um código de eleição próprio (297 para o governo do estado,
-    295 para a eleição geral federal em 2018). Tomamos os campos de eleição das linhas
-    estaduais do mesmo turno; sem isso `dim_eleicao` ganharia uma "eleição" só de
-    Presidente e o cargo não apareceria junto dos demais.
-  - Só o 1º turno entra, como em todo o painel (`FL_SERIE_PRINCIPAL`).
+  - 1º turno: o TSE dá a Presidente um código de eleição próprio (297 para o governo do
+    estado, 295 para a eleição geral federal em 2018). Tomamos os campos de eleição das
+    linhas estaduais; sem isso `dim_eleicao` ganharia uma "eleição" só de Presidente e o
+    cargo não apareceria junto dos demais.
+  - 2º turno: não há cargo estadual no mesmo turno para emprestar a eleição. Presidente
+    forma a sua própria eleição (CD_ELEICAO 296 em 2018, 545 em 2022), e o arquivo de
+    votação desse turno só tem Presidente.
 
 Os totais de Presidente diferem poucos votos dos de Governador no mesmo estado: o
 voto em trânsito deixa o eleitor de outra UF votar para Presidente numa seção daqui.
@@ -31,24 +33,29 @@ CAMPOS_DA_ELEICAO = [
 ]
 
 
-def anexa(df, ano):
-    """Empilha Presidente (1º turno) em `df`, o arquivo de votação do ano lido como texto.
+def anexa(df, ano, turno='1'):
+    """Empilha Presidente do `turno` em `df`, o arquivo de votação do ano lido como texto.
 
-    `df` ainda não pode ter `QT_VOTOS` convertido: as linhas anexadas chegam como texto.
-    Sem o arquivo de Presidente do ano (2020 e 2024), devolve `df` como está.
+    No 1º turno devolve `df` + Presidente; no 2º, só Presidente (o arquivo do estado não
+    tem nada nesse turno). `df` ainda não pode ter `QT_VOTOS` convertido: as linhas
+    anexadas chegam como texto. Sem o arquivo de Presidente do ano (2020 e 2024), devolve
+    `df` como está no 1º turno e vazio no 2º.
     """
     caminho = os.path.join(esquema.DIR_DADOS, str(ano), f'votacao_secao_{ano}_PRESIDENTE_PI.csv')
     if not os.path.exists(caminho):
-        return df
+        return df if turno == '1' else df.iloc[0:0]
     p = pd.read_csv(caminho, sep=';', encoding='latin1', quotechar='"', dtype=str,
                     na_values=esquema.NA_TSE)
     p.columns = [c.strip() for c in p.columns]
-    p = p[p['NR_TURNO'].str.strip() == '1'].copy()
-    assert len(p), f'{ano}: nenhuma linha de Presidente no 1º turno'
+    p = p[p['NR_TURNO'].str.strip() == turno].copy()
+    assert len(p), f'{ano}: nenhuma linha de Presidente no {turno}º turno'
 
     colunas = list(df.columns)
     faltam = [c for c in colunas if c not in p.columns]
     assert not faltam, f'{ano}: o arquivo de Presidente não tem as colunas {faltam}'
+
+    if turno != '1':
+        return p[colunas].reset_index(drop=True)
 
     estadual = df[df['NR_TURNO'].str.strip() == '1']
     assert len(estadual), f'{ano}: votação estadual sem 1º turno'

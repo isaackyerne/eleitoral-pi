@@ -12,9 +12,9 @@ em 2026), e liga tudo às chaves da base unificada:
   - SK_LOCAL    por (eleição, município, zona, nº do local);
   - SK_VOTAVEL  por (eleição, UE, cargo, nº do votável).
 
-Só entram votos NOMINAIS de eleições da série principal: branco, nulo e
-legenda não têm candidato a comparar, e as suplementares/2º turno de 2020 não
-aparecem no painel. A medida é `QT_VOTOS_NORM` (mesma de `fato_votos`), então
+Só entram votos NOMINAIS de eleições da série principal e dos seus 2º turnos
+(Presidente 2018 e 2022, Prefeito de Teresina 2020): branco, nulo e legenda não têm
+candidato a comparar, e as eleições suplementares não aparecem no painel. A medida é `QT_VOTOS_NORM` (mesma de `fato_votos`), então
 o Senador de 2018/2026 continua somável.
 
 A conferência final soma as seções de volta ao local e exige igualdade com
@@ -47,6 +47,10 @@ def secoes_do_ano(ano):
     """Votos por seção de um ano, com as colunas já como inteiros/strings limpos."""
     mod = importlib.import_module(f'consolida_{ano}')
     vt = mod.carrega_votacao()
+    if ano in (2018, 2022):
+        # O 2º turno de Presidente vem do arquivo nacional, em carga à parte (outro
+        # CD_ELEICAO, sem cargo estadual no mesmo turno).
+        vt = pd.concat([vt, mod.carrega_votacao('2')], ignore_index=True)
     if ano == 2026:
         # Mesmo vínculo de consolida_2026.main: o local da seção vem do cadastro
         # atual, não do arquivo de votos (que traz o local original, defasado).
@@ -71,7 +75,9 @@ def main():
     dec = ler('dim_eleicao_cargo')
     fv = ler('fato_votos')
 
-    principal = set(de.loc[de['FL_SERIE_PRINCIPAL'], 'SK_ELEICAO'])
+    # Série principal + 2º turno das eleições ordinárias (o painel os exibe por candidatura).
+    principal = set(de.loc[de['FL_SERIE_PRINCIPAL'] | ((de['NR_TURNO'] == 2) & ~de['FL_SUPLEMENTAR']),
+                           'SK_ELEICAO'])
     vpe = dec.set_index(['SK_ELEICAO', 'CD_CARGO'])['QT_VOTOS_POR_ELEITOR']
     nominal = dv[(dv['TP_VOTO'] == 'Nominal') & dv['SK_ELEICAO'].isin(principal)]
     chave_v = ['SK_ELEICAO', 'CD_MUNICIPIO_UE', 'CD_CARGO', 'NR_VOTAVEL']

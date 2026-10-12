@@ -28,6 +28,13 @@ ESFERA_POR_ANO = {
     2018: 'Estadual', 2020: 'Municipal', 2022: 'Estadual', 2024: 'Municipal', 2026: 'Estadual',
 }
 
+# Eleições acrescentadas depois da primeira versão publicada da base (2º turno de
+# Presidente de 2018 e de 2022): (ANO, CD_ELEICAO, NR_TURNO). Ficam no FIM da numeração de
+# SK_ELEICAO. O 2º turno de 2018 tem código (296) menor que o do 1º (297), e ordenar tudo
+# por (ano, código, turno) o empurraria para antes dele, renumerando as eleições que já
+# existem — e com elas votáveis e escolhas salvas pelos usuários ("meu candidato").
+ELEICOES_ACRESCENTADAS_DEPOIS = [(2018, 296, 2), (2022, 545, 2)]
+
 # Presidente é o único cargo de âmbito nacional: o TSE o publica só nos arquivos `_BR`
 # (ver presidente.py). Dentro da base ele é um cargo comum da eleição geral.
 CD_CARGO_PRESIDENTE = 1

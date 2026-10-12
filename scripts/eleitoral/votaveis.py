@@ -271,7 +271,9 @@ def resolver(bronze, dim_eleicao, dim_partido_ano, dim_partido):
            .sort_values(['SK_POLITICO', 'ANO_ELEICAO'])
            .groupby('SK_POLITICO')
            .agg(NM_POLITICO=('NM_VOTAVEL', 'last'),
-                QT_ELEICOES=('SK_ELEICAO', 'nunique'),
+                # Anos distintos, não SK_ELEICAO: o 2º turno é outra eleição na base, e quem
+                # disputou os dois turnos de 2022 disputou UMA eleição em 2022.
+                QT_ELEICOES=('ANO_ELEICAO', 'nunique'),
                 ANOS_PRESENTE=('ANO_ELEICAO', lambda s: ','.join(map(str, sorted(set(s))))))
            .reset_index())
     pol['NM_POLITICO_CHAVE'] = canon.chave(pol['NM_POLITICO'])

@@ -33,7 +33,7 @@ import { formataInteiro } from '../viz/paleta'
 const MAX_PESSOAS = 3
 
 const ABREVIACAO_CARGO: Record<string, string> = {
-  Prefeito: 'Pref.', Vereador: 'Ver.', Governador: 'Gov.', Senador: 'Sen.',
+  Presidente: 'Pres.', Prefeito: 'Pref.', Vereador: 'Ver.', Governador: 'Gov.', Senador: 'Sen.',
   'Deputado Federal': 'Dep. Fed.', 'Deputado Estadual': 'Dep. Est.',
 }
 
@@ -44,6 +44,12 @@ function titulo(s: string): string {
   return s.toLocaleLowerCase('pt-BR').split(' ')
     .map((p, i) => (i > 0 && MINUSCULAS.has(p) ? p : p.charAt(0).toLocaleUpperCase('pt-BR') + p.slice(1)))
     .join(' ')
+}
+
+/** "Pres. 2022" ou "Pres. 2022 2º t" — o 2º turno só aparece como sufixo. */
+function rotuloEleicao(c: { DS_CARGO: string; ANO_ELEICAO: number; NR_TURNO: number }): string {
+  const cargo = ABREVIACAO_CARGO[c.DS_CARGO] ?? c.DS_CARGO
+  return `${cargo} ${c.ANO_ELEICAO}${c.NR_TURNO === 2 ? ' 2º t' : ''}`
 }
 
 function iniciais(nome: string): string {
@@ -133,8 +139,12 @@ export function VotacaoPorBairro({
     let vivo = true
     ;(async () => {
       const porPessoa = await Promise.all(pessoas.map((p) => candidaturasDoPolitico(p, cdMunicipio)))
-      const colunas: Coluna[] = porPessoa.flatMap((cs, i) =>
-        cs.map((c) => ({ ...c, chave: `${pessoas[i]}:${c.SK_VOTAVEL}`, pessoa: i })))
+      // Colunas agrupadas por ELEIÇÃO (ano, turno, cargo) e, dentro dela, na ordem em que as
+      // pessoas foram escolhidas: Lula 2022 2º t | Jair 2022 2º t | Lula 2026 | Flávio 2026.
+      const colunas: Coluna[] = porPessoa
+        .flatMap((cs, i) => cs.map((c) => ({ ...c, chave: `${pessoas[i]}:${c.SK_VOTAVEL}`, pessoa: i })))
+        .sort((a, b) => a.ANO_ELEICAO - b.ANO_ELEICAO || a.NR_TURNO - b.NR_TURNO
+          || a.CD_CARGO - b.CD_CARGO || a.pessoa - b.pessoa)
       const celulas = await Promise.all(colunas.map((c) =>
         votosPorTerritorio({ skEleicao: c.SK_ELEICAO, cdCargo: c.CD_CARGO, skVotavel: c.SK_VOTAVEL }, cdMunicipio)))
       const mapas: Mapas[] = celulas.map((cs) => {
@@ -243,7 +253,7 @@ export function VotacaoPorBairro({
   function exportar() {
     if (!dados) return
     const { colunas, mapas } = dados
-    const rotulo = (c: Coluna) => `${c.NOME} · ${ABREVIACAO_CARGO[c.DS_CARGO] ?? c.DS_CARGO} ${c.ANO_ELEICAO}`
+    const rotulo = (c: Coluna) => `${c.NOME} · ${rotuloEleicao(c)}`
     const cabecalho = colunas.flatMap((c) => [
       { titulo: `${rotulo(c)} — votos`, tipo: 'inteiro' as const, largura: 18 },
       { titulo: `${rotulo(c)} — colocação`, tipo: 'inteiro' as const, largura: 14 },
@@ -393,7 +403,7 @@ export function VotacaoPorBairro({
                       : 'borda text-tinta-3 line-through hover:bg-tinta/5'
                   }`}
                 >
-                  {c.NOME} · {ABREVIACAO_CARGO[c.DS_CARGO] ?? c.DS_CARGO} {c.ANO_ELEICAO}
+                  {c.NOME} · {rotuloEleicao(c)}
                 </button>
               )
             })}
@@ -430,7 +440,7 @@ export function VotacaoPorBairro({
                       <Avatar nome={c.NOME} cor={corAvatar(c.SG_PARTIDO, c.pessoa)} />
                       <span className="mt-2 block text-[15px] font-bold text-tinta">{c.NOME}</span>
                       <span className="block text-xs text-tinta-2">
-                        {ABREVIACAO_CARGO[c.DS_CARGO] ?? c.DS_CARGO} {c.ANO_ELEICAO}
+                        {rotuloEleicao(c)}
                         {c.SG_PARTIDO ? ` · ${c.SG_PARTIDO}` : ''}
                       </span>
                       {(c.DS_SIT_TOT_TURNO?.toUpperCase().startsWith('ELEITO') || ordem === i) && (

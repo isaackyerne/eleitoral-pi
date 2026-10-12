@@ -277,7 +277,8 @@ export default function App() {
           <footer className="pt-2 pb-6 text-sm text-tinta-3">
             <p>
               Fonte: dados abertos do Tribunal Superior Eleitoral. O painel considera
-              o 1º turno das eleições regulares; eleições suplementares ficam de fora.
+              o 1º turno das eleições regulares (o 2º turno aparece pelo seletor de
+              Turno e em Votação por bairro); eleições suplementares ficam de fora.
             </p>
             <p className="mt-1">Análise e elaboração: Isaac Kyerne — IKGeo</p>
           </footer>

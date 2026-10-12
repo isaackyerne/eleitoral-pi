@@ -34,20 +34,20 @@ CHAVE_LOCAL = ['CD_MUNICIPIO', 'NR_ZONA', 'NR_LOCAL_VOTACAO']
 # FL_LOCAL_REMANEJADO.
 
 
-def carrega_votacao():
+def carrega_votacao(turno='1'):
     df = pd.read_csv(
         os.path.join(BRUTO, 'votacao_secao_2018_PI.csv'),
         sep=';', encoding='latin1', quotechar='"', dtype=str,
         na_values=esquema.NA_TSE,
     )
     # Presidente só existe no arquivo nacional do TSE; ver eleitoral/presidente.py.
-    df = presidente.anexa(df, 2018)
+    df = presidente.anexa(df, 2018, turno)
     df['QT_VOTOS'] = pd.to_numeric(df['QT_VOTOS'])
     return df
 
 
-def carrega_eleitorado():
-    """Lê o arquivo nacional em blocos, mantendo apenas o PI, 1º turno."""
+def carrega_eleitorado(turno='1'):
+    """Lê o arquivo nacional em blocos, mantendo apenas o PI do turno pedido."""
     partes = []
     leitor = pd.read_csv(
         os.path.join(BRUTO, 'eleitorado_local_votacao_2018.csv'),
@@ -55,7 +55,7 @@ def carrega_eleitorado():
         na_values=esquema.NA_TSE, chunksize=200_000,
     )
     for bloco in leitor:
-        partes.append(bloco[(bloco['SG_UF'] == 'PI') & (bloco['NR_TURNO'] == '1')])
+        partes.append(bloco[(bloco['SG_UF'] == 'PI') & (bloco['NR_TURNO'] == turno)])
     df = pd.concat(partes, ignore_index=True)
     for c in ['QT_ELEITOR_SECAO', 'QT_ELEITOR_ELEICAO_ESTADUAL']:
         df[c] = pd.to_numeric(df[c])
@@ -144,18 +144,27 @@ def classifica_voto(cargo, nr_votavel):
     return 'Nominal'
 
 
-def main():
-    print('lendo votação...')
-    vt = carrega_votacao()
+def main(turno='1'):
+    """`turno='2'` gera só o 2º turno de Presidente, em `eleicoes_pi_2018_2t.csv`.
+
+    O 2018 não separa turnos nas chaves (CHAVE_SECAO/CHAVE_LOCAL): o 2º turno repete os
+    mesmos números de candidato do 1º, então cada turno roda isolado, com votos e cadastro
+    filtrados por ele — nunca misturados na mesma agregação.
+    """
+    saida = SAIDA if turno == '1' else SAIDA.replace('.csv', '_2t.csv')
+    print(f'lendo votação ({turno}º turno)...')
+    vt = carrega_votacao(turno)
     print('lendo eleitorado (filtrando PI)...')
-    el = carrega_eleitorado()
+    el = carrega_eleitorado(turno)
 
     pr = aptos_por_secao(el)
     locais = cadastro_locais(pr)
 
-    # Comparecimento: total de votos de um cargo de voto único (Governador).
+    # Comparecimento: total de votos de um cargo de voto único — Governador no 1º turno,
+    # Presidente no 2º (único cargo em disputa).
+    cargo_comp = 'Governador' if turno == '1' else 'Presidente'
     comp = (
-        vt[vt['DS_CARGO'] == 'Governador']
+        vt[vt['DS_CARGO'] == cargo_comp]
         .groupby(CHAVE_LOCAL, as_index=False)['QT_VOTOS'].sum()
         .rename(columns={'QT_VOTOS': 'QT_COMPARECIMENTO'})
     )
@@ -175,6 +184,12 @@ def main():
     # O nome de cada partido é extraído das próprias linhas de voto de legenda.
     legenda = votos[votos['TP_VOTO'] == 'Legenda'][['NR_VOTAVEL', 'NM_VOTAVEL']].drop_duplicates()
     mapa_partido = dict(zip(legenda['NR_VOTAVEL'], legenda['NM_VOTAVEL']))
+    if turno != '1':
+        # O 2º turno só tem Presidente: não há linha de legenda de onde tirar o nome do
+        # partido. Usa o mapa número -> nome já consolidado no 1º turno do mesmo ano.
+        t1 = pd.read_csv(SAIDA, usecols=['NR_PARTIDO', 'NM_PARTIDO'], dtype=str).dropna().drop_duplicates('NR_PARTIDO')
+        for n, nm in zip(t1['NR_PARTIDO'], t1['NM_PARTIDO']):
+            mapa_partido.setdefault(n, nm)
     votos['NM_PARTIDO'] = votos['NR_PARTIDO'].map(mapa_partido)
     votos['SQ_CANDIDATO'] = votos['SQ_CANDIDATO'].where(votos['SQ_CANDIDATO'] != '-3')
 
@@ -203,6 +218,16 @@ def main():
         df['QT_VOTOS_TOTAL_LOCAL_CARGO'] > 0,
         (df['QT_VOTOS'] / df['QT_VOTOS_TOTAL_LOCAL_CARGO'] * 100).round(4), np.nan)
 
+    # No 2º turno o comparecimento vem dos votos de Presidente, que incluem o voto em
+    # trânsito: eleitor de fora votando em seção especial (aeroporto, rodoviária, presídio,
+    # faculdade), onde não há eleitor apto cadastrado (QT_APTOS = 0). Nesses locais os
+    # aptos passam a ser o próprio comparecimento — sem isso a abstenção sai negativa —
+    # e FL_APTOS_ESTIMADO marca a linha.
+    if turno != '1':
+        acima = df['QT_COMPARECIMENTO'] > df['QT_APTOS']
+        df.loc[acima, 'QT_APTOS'] = df.loc[acima, 'QT_COMPARECIMENTO']
+        df.loc[acima, 'FL_APTOS_ESTIMADO'] = True
+
     df['QT_ABSTENCAO'] = df['QT_APTOS'] - df['QT_COMPARECIMENTO']
     df['PCT_COMPARECIMENTO'] = np.where(
         df['QT_APTOS'] > 0, (df['QT_COMPARECIMENTO'] / df['QT_APTOS'] * 100).round(4), np.nan)
@@ -210,7 +235,7 @@ def main():
         df['QT_APTOS'] > 0, (df['QT_ABSTENCAO'] / df['QT_APTOS'] * 100).round(4), np.nan)
 
     df['ANO_ELEICAO'] = 2018
-    df['NR_TURNO'] = 1
+    df['NR_TURNO'] = int(turno)
     df['SG_UF'] = 'PI'
     df['DT_ELEICAO'] = pd.to_datetime(df['DT_ELEICAO'], format='%d/%m/%Y').dt.strftime('%Y-%m-%d')
     df['ID_LOCAL'] = df['CD_MUNICIPIO'] + '-' + df['NR_ZONA'] + '-' + df['NR_LOCAL_VOTACAO']
@@ -253,10 +278,11 @@ def main():
         print(f'  aviso: {len(excesso)} locais com comparecimento acima dos aptos')
 
     os.makedirs(SAIDA_DIR, exist_ok=True)
-    df.to_csv(SAIDA, index=False, encoding='utf-8', sep=',', decimal='.')
-    print(f'gravado: {SAIDA}  ({len(df):,} linhas x {len(df.columns)} colunas)')
+    df.to_csv(saida, index=False, encoding='utf-8', sep=',', decimal='.')
+    print(f'gravado: {saida}  ({len(df):,} linhas x {len(df.columns)} colunas)')
     return df
 
 
 if __name__ == '__main__':
-    main()
+    main('1')
+    main('2')

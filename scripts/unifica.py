@@ -25,14 +25,18 @@ def carrega_bronze():
     """Empilha os quatro anos, alinhando o esquema."""
     partes = []
     for ano in esquema.ANOS:
-        caminho = os.path.join(esquema.DIR_BRONZE, f'eleicoes_pi_{ano}.csv')
-        d = pd.read_csv(caminho, dtype=esquema.BRONZE_DTYPES_LEITURA, low_memory=False)
-        faltando = [c for c in esquema.bronze_colunas(ano) if c not in d.columns]
-        assert not faltando, f'{ano}: faltam colunas no bronze {faltando}'
-        for extra in esquema.BRONZE_EXTRAS_2024:
-            if extra not in d.columns:
-                d[extra] = pd.NA
-        partes.append(d)
+        # `_2t` é o 2º turno de Presidente (2018 e 2022), gerado à parte pelo consolida do ano.
+        for sufixo in ('', '_2t'):
+            caminho = os.path.join(esquema.DIR_BRONZE, f'eleicoes_pi_{ano}{sufixo}.csv')
+            if sufixo and not os.path.exists(caminho):
+                continue
+            d = pd.read_csv(caminho, dtype=esquema.BRONZE_DTYPES_LEITURA, low_memory=False)
+            faltando = [c for c in esquema.bronze_colunas(ano) if c not in d.columns]
+            assert not faltando, f'{ano}{sufixo}: faltam colunas no bronze {faltando}'
+            for extra in esquema.BRONZE_EXTRAS_2024:
+                if extra not in d.columns:
+                    d[extra] = pd.NA
+            partes.append(d)
     b = pd.concat(partes, ignore_index=True)
     b['TP_ESFERA'] = b['ANO_ELEICAO'].map(esquema.ESFERA_POR_ANO)
     # Unidade eleitoral: o município nas municipais, o estado nas estaduais.
@@ -43,9 +47,12 @@ def carrega_bronze():
 def monta_dim_eleicao(b):
     e = (b[['ANO_ELEICAO', 'CD_ELEICAO', 'DS_ELEICAO', 'NM_TIPO_ELEICAO', 'NR_TURNO',
             'DT_ELEICAO', 'TP_ESFERA', 'FL_ELEICAO_SUPLEMENTAR']]
-         .drop_duplicates()
-         .sort_values(['ANO_ELEICAO', 'CD_ELEICAO', 'NR_TURNO'])
-         .reset_index(drop=True))
+         .drop_duplicates())
+    # As eleições acrescentadas depois vão para o fim, para não renumerar as existentes.
+    chave = list(zip(e['ANO_ELEICAO'], e['CD_ELEICAO'], e['NR_TURNO']))
+    e['_tardia'] = [k in esquema.ELEICOES_ACRESCENTADAS_DEPOIS for k in chave]
+    e = (e.sort_values(['_tardia', 'ANO_ELEICAO', 'CD_ELEICAO', 'NR_TURNO'])
+         .drop(columns='_tardia').reset_index(drop=True))
     e['SK_ELEICAO'] = range(1, len(e) + 1)
     e = e.rename(columns={'FL_ELEICAO_SUPLEMENTAR': 'FL_SUPLEMENTAR'})
     # A série principal é o 1º turno de cada eleição ordinária: um único
@@ -133,10 +140,11 @@ def _aplica_geo_corrigida(d):
     """Troca a coordenada de (local, ano) em que o TSE errou o ponto.
 
     `locais_geo_corrigida.csv` guarda só correções comprovadas, uma por (município,
-    zona, local, ano), com o motivo. Ao contrário de `_geo_manual`, SOBRESCREVE a
-    coordenada do TSE — por isso cada linha tem de achar exatamente um registro: se o
-    local sumir ou mudar de número, o script para em vez de ignorar a correção. O
-    bronze não é tocado; a correção vale só para a base unificada.
+    zona, local, ano), com o motivo, e vale para todas as eleições do ano (1º e 2º
+    turno). Ao contrário de `_geo_manual`, SOBRESCREVE a coordenada do TSE — por isso
+    cada linha tem de achar ao menos um registro: se o local sumir ou mudar de número,
+    o script para em vez de ignorar a correção. O bronze não é tocado; a correção vale
+    só para a base unificada.
     """
     caminho = os.path.join(esquema.DIR_REFERENCIA, 'locais_geo_corrigida.csv')
     if not os.path.exists(caminho):
@@ -148,8 +156,8 @@ def _aplica_geo_corrigida(d):
     idx = d.set_index(chave).index
     for _, r in c.iterrows():
         achou = idx.isin([tuple(r[k] for k in chave)])
-        assert achou.sum() == 1, (
-            f'locais_geo_corrigida.csv: {tuple(r[k] for k in chave)} casa com {achou.sum()} registros')
+        assert achou.sum() >= 1, (
+            f'locais_geo_corrigida.csv: {tuple(r[k] for k in chave)} não casa com nenhum registro')
         d.loc[achou, ['LATITUDE', 'LONGITUDE']] = [r['LATITUDE'], r['LONGITUDE']]
     return d
 
