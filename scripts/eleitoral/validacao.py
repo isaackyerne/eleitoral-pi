@@ -12,16 +12,19 @@ from . import esquema, partidos
 # 1.997.932, 2.115.645 e 2.240.883 votos. É um pouco mais que o Governador do mesmo
 # estado porque o voto em trânsito deixa eleitor de outra UF votar para Presidente
 # numa seção daqui. Os valores sem Presidente eram 9.987.935, 8.456.024 e 11.196.930.
+# O 2º turno de Presidente (só o Piauí) soma 1.946.971 votos em 2018 e 2.088.530 em 2022;
+# os totais abaixo já o incluem.
 VOTOS_POR_ANO = {
-    2018: 11_985_867, 2020: 4_593_905, 2022: 10_571_669, 2024: 4_599_674,
+    2018: 13_932_838, 2020: 4_593_905, 2022: 12_660_199, 2024: 4_599_674,
     # 2026 sem Presidente = 2.239.386 votantes x 5 votos (Governador, Dep. Federal,
     # Dep. Estadual e 2 de Senador); conferido contra o arquivo de votação por
     # seção, 1º turno. Com Presidente: + 2.240.883.
     2026: 13_437_813,
 }
 TOTAL_VOTOS = sum(VOTOS_POR_ANO.values())
-# 1.421.107 linhas dos 6 cargos + 82.471 de Presidente (33.169 + 24.698 + 24.604).
-TOTAL_LINHAS = 1_503_578
+# 1.421.107 linhas dos 6 cargos + 82.471 de Presidente no 1º turno (33.169 + 24.698 +
+# 24.604) + 26.157 no 2º turno (13.215 em 2018 e 12.942 em 2022).
+TOTAL_LINHAS = 1_529_735
 
 # Resultados oficiais, em % dos votos válidos na definição legal — que exclui
 # votos em candidato com registro indeferido. Em 2022 três candidatos a
